@@ -131,6 +131,7 @@ def parse_digest_to_articles(digest_text):
     articles = []
     current_category = "General Intelligence"
     
+    # Split by categories (##)
     sections = re.split(r'\n(?=## )', digest_text)
     
     for section in sections:
@@ -140,8 +141,8 @@ def parse_digest_to_articles(digest_text):
         lines = section.split("\n")
         if lines[0].startswith("## "):
             current_category = lines[0].replace("## ", "").strip()
-            if "### " not in section: continue 
 
+        # Split by articles (###)
         raw_articles = re.split(r'\n(?=### )', section)
         for raw_art in raw_articles:
             raw_art = raw_art.strip()
@@ -149,21 +150,28 @@ def parse_digest_to_articles(digest_text):
                 
             art_lines = raw_art.split("\n")
             title = art_lines[0].replace("### ", "").strip()
-            summary = ""
-            url = "#"
+            summary_parts = []
+            url = None
             
             for line in art_lines[1:]:
-                if "Source:" in line:
-                    match = re.search(r'\((https?://.*?)\)', line)
-                    if match: url = match.group(1)
-                    else:
-                        match = re.search(r'(https?://[^\s]+)', line)
-                        if match: url = match.group(0)
-                elif line.strip() and not line.startswith("##"):
-                    summary += line.strip() + " "
+                # More robust URL extraction: looks for any http link in the line
+                link_match = re.search(r'https?://[^\s\)\>]+', line)
+                if link_match and not url:
+                    url = link_match.group(0).rstrip('.,')
+                
+                # If it's not a category/header line, treat it as summary text
+                if line.strip() and not line.startswith("#"):
+                    summary_parts.append(line.strip())
+            
+            summary = " ".join(summary_parts)
             
             if title and summary:
-                articles.append({"title": title, "summary": summary.strip(), "category": current_category, "url": url})
+                articles.append({
+                    "title": title, 
+                    "summary": summary[:4000], # Discord limit safety
+                    "category": current_category, 
+                    "url": url if url else "" # Use empty string instead of '#'
+                })
 
     logger.info(f"Successfully parsed {len(articles)} articles.")
     return articles
@@ -195,17 +203,23 @@ def send_discord_notification(digest_text, articles):
     # Send each article as its own embed to handle long summaries
     for article in articles:
         try:
+            embed = {
+                "title": article['title'],
+                "description": article['summary'],
+                "color": 3447003,
+                "footer": {"text": f"Category: {article['category']}"},
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            # ONLY add the URL if it actually looks like a link
+            if article['url'] and article['url'].startswith("http"):
+                embed["url"] = article['url']
+
             payload = {
                 "username": "The Thinking Times",
-                "embeds": [{
-                    "title": article['title'],
-                    "description": article['summary'], # Up to 4096 chars
-                    "url": article['url'],
-                    "color": 3447003,
-                    "footer": {"text": f"Category: {article['category']}"},
-                    "timestamp": datetime.utcnow().isoformat()
-                }]
+                "embeds": [embed]
             }
+            
             r = requests.post(DISCORD_WEBHOOK_URL, json=payload)
             if r.status_code not in [200, 204]:
                 logger.error(f"Discord error for '{article['title']}': {r.status_code} {r.text}")

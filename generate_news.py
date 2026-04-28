@@ -77,24 +77,27 @@ def stage1_selection(news_items):
         response = client.chat.completions.create(
             model=config['llm']['model'],
             messages=[
-                {"role": "system", "content": "You are a professional news editor. Output ONLY a JSON array of IDs."},
+                {"role": "system", "content": "You are a professional news editor. Output ONLY a JSON array of IDs like ['ID-1', 'ID-2']."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.2
         )
         content = response.choices[0].message.content.strip()
-        # Extract JSON array using regex if needed
-        json_match = re.search(r'\[.*\]', content, re.DOTALL)
-        if json_match:
-            content = json_match.group(0)
+        logger.info(f"Stage 1 Raw Output: {content[:100]}...")
+        
+        # Super robust ID extraction
+        selected_ids = re.findall(r'ID-\d+', content)
+        
+        if not selected_ids:
+            logger.warning("No IDs found in LLM output. Using fallback.")
+            return news_items[:15]
             
-        selected_ids = json.loads(content)
         selected_items = [item for item in news_items if item['id'] in selected_ids]
         logger.info(f"Selected {len(selected_items)} items.")
         return selected_items
     except Exception as e:
         logger.error(f"Stage 1 Error: {e}")
-        return news_items[:20] # Fallback
+        return news_items[:15]
 
 def stage2_summarization(selected_items):
     logger.info("Stage 2: Generating detailed summaries...")
@@ -113,10 +116,11 @@ def stage2_summarization(selected_items):
         response = client.chat.completions.create(
             model=config['llm']['model'],
             messages=[
-                {"role": "system", "content": "You are a senior AI industry analyst."},
+                {"role": "system", "content": "You are a senior AI industry analyst. Follow the Markdown format strictly (## Category, ### Headline)."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3
+            temperature=0.3,
+            max_tokens=4000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -127,64 +131,54 @@ def parse_digest_to_articles(digest_text):
     articles = []
     current_category = "General Intelligence"
     
-    # Split by double newlines to handle sections better
     sections = re.split(r'\n(?=## )', digest_text)
     
     for section in sections:
-        lines = section.strip().split("\n")
-        if not lines: continue
+        section = section.strip()
+        if not section: continue
         
-        # Check for category header
+        lines = section.split("\n")
         if lines[0].startswith("## "):
             current_category = lines[0].replace("## ", "").strip()
-            lines = lines[1:] # Remove category line
-            
-        # Split section into individual articles by "### "
-        raw_articles = re.split(r'\n(?=### )', "\n".join(lines))
-        
+            if "### " not in section: continue 
+
+        raw_articles = re.split(r'\n(?=### )', section)
         for raw_art in raw_articles:
-            art_lines = raw_art.strip().split("\n")
-            if not art_lines or not art_lines[0].startswith("### "):
-                continue
+            raw_art = raw_art.strip()
+            if not raw_art or not raw_art.startswith("### "): continue
                 
+            art_lines = raw_art.split("\n")
             title = art_lines[0].replace("### ", "").strip()
             summary = ""
             url = "#"
             
             for line in art_lines[1:]:
                 if "Source:" in line:
-                    match = re.search(r'\[(.*?)\]\((.*?)\)', line)
-                    if match:
-                        url = match.group(2)
-                elif line.strip():
+                    match = re.search(r'\((https?://.*?)\)', line)
+                    if match: url = match.group(1)
+                    else:
+                        match = re.search(r'(https?://[^\s]+)', line)
+                        if match: url = match.group(0)
+                elif line.strip() and not line.startswith("##"):
                     summary += line.strip() + " "
             
-            articles.append({
-                "title": title,
-                "summary": summary.strip(),
-                "category": current_category,
-                "url": url
-            })
+            if title and summary:
+                articles.append({"title": title, "summary": summary.strip(), "category": current_category, "url": url})
 
-    logger.info(f"Successfully parsed {len(articles)} articles from digest.")
+    logger.info(f"Successfully parsed {len(articles)} articles.")
     return articles
 
 def send_discord_notification(digest_text, articles):
-    if not DISCORD_WEBHOOK_URL:
-        logger.info("No Discord Webhook URL provided.")
-        return
+    if not DISCORD_WEBHOOK_URL: return
         
-    logger.info(f"Attempting to send {len(articles)} articles to Discord...")
+    logger.info(f"Sending dispatch to Discord (Parsed: {len(articles)})")
+    requests.post(DISCORD_WEBHOOK_URL, json={"content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**", "username": "The Thinking Times"})
 
-    # Send a Header Message
-    try:
-        r = requests.post(DISCORD_WEBHOOK_URL, json={
-            "content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**",
-            "username": "The Thinking Times"
-        })
-        logger.info(f"Header sent. Status: {r.status_code}")
-    except Exception as e:
-        logger.error(f"Failed to send header: {e}")
+    if not articles:
+        chunks = [digest_text[i:i+1900] for i in range(0, len(digest_text), 1900)]
+        for chunk in chunks:
+            requests.post(DISCORD_WEBHOOK_URL, json={"content": chunk, "username": "The Thinking Times"})
+        return
 
     for i in range(0, len(articles), 5):
         batch = articles[i:i+5]
@@ -192,21 +186,12 @@ def send_discord_notification(digest_text, articles):
         for article in batch:
             embeds.append({
                 "title": article['title'],
-                "description": article['summary'][:2000],
+                "description": article['summary'][:1000] + "...",
                 "url": article['url'],
                 "color": 3447003,
-                "footer": {"text": f"Category: {article['category']}"},
-                "timestamp": datetime.utcnow().isoformat()
+                "footer": {"text": f"Category: {article['category']}"}
             })
-        
-        try:
-            r = requests.post(DISCORD_WEBHOOK_URL, json={
-                "embeds": embeds,
-                "username": "The Thinking Times"
-            })
-            logger.info(f"Batch {i//5 + 1} sent. Status: {r.status_code}")
-        except Exception as e:
-            logger.error(f"Discord error in batch {i//5 + 1}: {e}")
+        requests.post(DISCORD_WEBHOOK_URL, json={"embeds": embeds, "username": "The Thinking Times"})
 
 def main():
     logger.info("Starting The Thinking Times news generation...")

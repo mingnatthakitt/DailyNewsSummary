@@ -3,7 +3,7 @@ llm:
 #  model: moonshotai/kimi-k2-instruct
 #  base_url: https://integrate.api.nvidia.com/v1
   base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  model: "gemini-3.1-flash-live-preview"
+  model: "gemini-flash-latest"
 
 news:
   max_items_per_source: 5

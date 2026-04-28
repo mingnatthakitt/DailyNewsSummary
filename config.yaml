@@ -32,7 +32,7 @@ news:
       CRITICAL: Select exactly 15-20 items.
 
   stage2_prompt_template: |
-      You are a senior AI industry analyst. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
+      You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
 
       {selected_news}
 

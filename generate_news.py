@@ -21,7 +21,7 @@ except Exception as e:
     logger.error(f"Failed to load config.yaml: {e}")
     exit(1)
 
-#NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
@@ -123,11 +123,11 @@ def stage2_summarization(selected_items):
         response = client.chat.completions.create(
             model=config['llm']['model'],
             messages=[
-                {"role": "system", "content": "You are a senior AI industry analyst. Follow the Markdown format strictly (## Category, ### Headline)."},
+                {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. Follow the Markdown format strictly (## Category, ### Headline)."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=4000
+            max_tokens=10000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:

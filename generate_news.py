@@ -3,137 +3,219 @@ from openai import OpenAI
 import json
 import os
 import requests
+import yaml
 from datetime import datetime
+import re
+import logging
 
-# Configuration
-FEEDS = {
-    "Tech": [
-        "https://techcrunch.com/feed/",
-        "https://www.theverge.com/rss/index.xml"
-    ],
-    "Finance": [
-        "https://finance.yahoo.com/news/rssindex",
-        "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best"
-    ],
-    "General": [
-        "https://www.reutersagency.com/feed/?best-topics=general-news&post_type=best",
-        "https://feeds.bbci.co.uk/news/world/rss.xml"
-    ]
-}
+# Setup Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Load Config
+try:
+    with open("config.yaml", "r") as f:
+        config = yaml.safe_load(f)
+except Exception as e:
+    logger.error(f"Failed to load config.yaml: {e}")
+    exit(1)
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
+if not NVIDIA_API_KEY:
+    logger.error("NVIDIA_API_KEY not found in environment.")
+    exit(1)
+
 client = OpenAI(
-    base_url="https://integrate.api.nvidia.com/v1",
+    base_url=config['llm']['base_url'],
     api_key=NVIDIA_API_KEY
 )
 
+def fetch_all_news():
+    all_items = []
+    item_id = 0
+    for group, sources in config['feeds'].items():
+        logger.info(f"Fetching {group}...")
+        for name, url in sources.items():
+            try:
+                feed = feedparser.parse(url)
+                if not feed.entries:
+                    logger.warning(f"No entries found for {name}")
+                    continue
+                
+                count = 0
+                for entry in feed.entries:
+                    if count >= config['news']['max_items_per_source']:
+                        break
+                    
+                    item_id += 1
+                    all_items.append({
+                        "id": f"ID-{item_id}",
+                        "source": name,
+                        "title": entry.title,
+                        "description": entry.summary if hasattr(entry, 'summary') else entry.title,
+                        "url": entry.link,
+                        "group": group
+                    })
+                    count += 1
+            except Exception as e:
+                logger.error(f"Error fetching {name}: {e}")
+    return all_items
 
-def fetch_rss_news():
-    news_items = []
-    for category, urls in FEEDS.items():
-        print(f"Fetching {category} news...")
-        for url in urls:
-            feed = feedparser.parse(url)
-            # Take top 3 from each source to avoid overload
-            for entry in feed.entries[:3]:
-                news_items.append({
-                    "title": entry.title,
-                    "description": entry.summary if hasattr(entry, 'summary') else entry.title,
-                    "url": entry.link,
-                    "category": category
-                })
-    return news_items
-
-def summarize_news(news_items):
-    summarized_articles = []
+def stage1_selection(news_items):
+    logger.info(f"Stage 1: Selecting top items from {len(news_items)} stories...")
     
-    for item in news_items:
-        prompt = f"""
-        Summarize the following news article into exactly 2 sentences. 
-        Focus on the 'what happened' and 'why it matters'.
-        Keep the tone professional yet engaging.
-        
-        Title: {item['title']}
-        Content: {item['description']}
-        """
-        try:
-            response = client.chat.completions.create(
-                model="moonshotai/kimi-k2-instruct",
-                messages=[
-                    {"role": "system", "content": "You are a professional news summarizer."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.6,
-                top_p=0.9,
-                max_tokens=150
-            )
-            summary = response.choices[0].message.content.strip()
-            summarized_articles.append({
-                "title": item['title'],
-                "summary": summary,
-                "url": item['url'],
-                "category": item['category']
-            })
-            print(f"Summarized: {item['title'][:50]}...")
-        except Exception as e:
-            print(f"Error summarizing {item['title']}: {e}")
-            
-    return summarized_articles
-
-def send_discord_notification(articles):
-    if not DISCORD_WEBHOOK_URL:
-        print("No Discord Webhook URL provided. Skipping notification.")
-        return
-
-    # Create a nice embed with the top 5 stories
-    embeds = []
-    for article in articles[:5]:
-        embeds.append({
-            "title": article['title'],
-            "description": article['summary'],
-            "url": article['url'],
-            "color": 3447003, # Blue
-            "footer": {"text": f"Category: {article['category']}"}
-        })
-
-    payload = {
-        "content": "🚀 **Daily Pulse: Your AI-Summarized News is Ready!**",
-        "embeds": embeds,
-        "username": "Pulse AI"
-    }
-
+    formatted_news = "\n".join([f"[{item['id']}] {item['title']} - {item['source']}" for item in news_items])
+    
+    prompt = config['news']['stage1_prompt_template'].format(
+        formatted_news=formatted_news,
+        total_items=len(news_items)
+    )
+    
     try:
-        response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
-        response.raise_for_status()
-        print("Discord notification sent!")
+        response = client.chat.completions.create(
+            model=config['llm']['model'],
+            messages=[
+                {"role": "system", "content": "You are a professional news editor. Output ONLY a JSON array of IDs."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2
+        )
+        content = response.choices[0].message.content.strip()
+        # Extract JSON array using regex if needed
+        json_match = re.search(r'\[.*\]', content, re.DOTALL)
+        if json_match:
+            content = json_match.group(0)
+            
+        selected_ids = json.loads(content)
+        selected_items = [item for item in news_items if item['id'] in selected_ids]
+        logger.info(f"Selected {len(selected_items)} items.")
+        return selected_items
     except Exception as e:
-        print(f"Failed to send Discord notification: {e}")
+        logger.error(f"Stage 1 Error: {e}")
+        return news_items[:20] # Fallback
+
+def stage2_summarization(selected_items):
+    logger.info("Stage 2: Generating detailed summaries...")
+    
+    formatted_selected = "\n".join([
+        f"ID: {item['id']}\nTitle: {item['title']}\nSource: {item['source']}\nURL: {item['url']}\nContent: {item['description']}\n---" 
+        for item in selected_items
+    ])
+    
+    prompt = config['news']['stage2_prompt_template'].format(
+        count=len(selected_items),
+        selected_news=formatted_selected
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model=config['llm']['model'],
+            messages=[
+                {"role": "system", "content": "You are a senior AI industry analyst."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Stage 2 Error: {e}")
+        return "Error generating digest."
+
+def parse_digest_to_articles(digest_text):
+    articles = []
+    current_category = "General"
+    
+    lines = digest_text.split("\n")
+    current_article = None
+    
+    for line in lines:
+        line = line.strip()
+        if not line: continue
+        
+        if line.startswith("## ") and not line.startswith("###"):
+            current_category = line.replace("## ", "").strip()
+        elif line.startswith("### "):
+            if current_article:
+                articles.append(current_article)
+            current_article = {
+                "title": line.replace("### ", "").strip(),
+                "summary": "",
+                "category": current_category,
+                "url": ""
+            }
+        elif current_article:
+            if "Source:" in line:
+                match = re.search(r'\[(.*?)\]\((.*?)\)', line)
+                if match:
+                    current_article["url"] = match.group(2)
+            else:
+                current_article["summary"] += line + " "
+
+    if current_article:
+        articles.append(current_article)
+        
+    return articles
+
+def send_discord_notification(digest_text, articles):
+    if not DISCORD_WEBHOOK_URL:
+        logger.info("No Discord Webhook URL provided.")
+        return
+        
+    # Send a Header Message
+    try:
+        requests.post(DISCORD_WEBHOOK_URL, json={
+            "content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**",
+            "username": "The Thinking Times"
+        })
+    except:
+        pass
+
+    # Group articles into Embeds (Discord limit: 10 embeds per message, each max 6000 chars)
+    # We'll send them in batches of 5 for safety and clarity
+    for i in range(0, len(articles), 5):
+        batch = articles[i:i+5]
+        embeds = []
+        for article in batch:
+            embeds.append({
+                "title": article['title'],
+                "description": article['summary'][:2000], # Discord limit
+                "url": article['url'],
+                "color": 3447003, # Deep Blue
+                "footer": {"text": f"Category: {article['category']}"},
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json={
+                "embeds": embeds,
+                "username": "The Thinking Times"
+            })
+        except Exception as e:
+            logger.error(f"Discord error: {e}")
 
 def main():
-    print("Starting news aggregation...")
-    raw_news = fetch_rss_news()
-    
+    logger.info("Starting The Thinking Times news generation...")
+    raw_news = fetch_all_news()
     if not raw_news:
-        print("No news found.")
+        logger.error("No news fetched. Exiting.")
         return
-
-    summarized = summarize_news(raw_news)
     
-    # Save to news.json
+    selected = stage1_selection(raw_news)
+    digest = stage2_summarization(selected)
+    
+    articles = parse_digest_to_articles(digest)
     output_data = {
         "last_updated": datetime.now().isoformat(),
-        "articles": summarized
+        "articles": articles
     }
     
     with open("news.json", "w") as f:
         json.dump(output_data, f, indent=4)
-    
-    print(f"Saved {len(summarized)} articles to news.json")
-    
-    # Send notification
-    send_discord_notification(summarized)
+        
+    send_discord_notification(digest, articles)
+    logger.info("Process complete.")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,104 @@
+llm:
+  provider: nvidia
+  model: moonshotai/kimi-k2-instruct
+  base_url: https://integrate.api.nvidia.com/v1
+
+news:
+  max_items_per_source: 5
+  stage1_prompt_template: |
+      {formatted_news}
+
+      ## YOUR TASK - STAGE 1: NEWS SELECTION
+
+      You are a senior AI industry analyst. Analyze the {total_items} news items above and select exactly 15-20 of the highest-quality items.
+
+      ### SELECTION CRITERIA:
+      - ✅ Groundbreaking research or technical breakthroughs
+      - ✅ Major product launches or significant updates
+      - ✅ Important policy changes or regulations
+      - ✅ Large funding rounds or M&A activities
+      - ✅ Balanced coverage across categories (LLM, Agents, Research, Products, etc.)
+      - ✅ Include both international and domestic news when available
+      - ✅ Prefer primary sources over secondary reporting
+
+      ### OUTPUT FORMAT:
+      Return ONLY a JSON array of selected news IDs. No explanations, no markdown, just the JSON array.
+
+      Example format:
+      ["ID-1", "ID-5", "ID-12", ...]
+
+      CRITICAL: Select exactly 15-20 items.
+
+  stage2_prompt_template: |
+      You are a senior AI industry analyst. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
+
+      {selected_news}
+
+      ## OUTPUT STRUCTURE:
+
+      Organize news items into relevant categories (use only categories that have news):
+      1. **Large Language Models & Foundation Models**
+      2. **AI Agents & Autonomous Systems**
+      3. **Multimodal AI**
+      4. **Research & Academic Breakthroughs**
+      5. **Product Launches & Updates**
+      6. **AI Infrastructure & Hardware**
+      7. **Healthcare & Biomedical AI**
+      8. **Robotics & Autonomous Vehicles**
+      9. **Enterprise & Industry Applications**
+      10. **Funding & Market Dynamics**
+      11. **Policy & Regulation**
+      12. **Open Source & Community**
+
+      ## CONTENT REQUIREMENTS:
+
+      For each news item, provide:
+      1. **Clear Headline**: Informative title
+      2. **Analytical Summary (4-6 sentences)**:
+         - What happened
+         - Technical details or metrics
+         - Why it matters
+         - Potential implications
+      3. **Source Attribution**: [Source Name](URL)
+
+      ## WRITING STYLE:
+      - Professional, analytical tone
+      - Include specific numbers and data points
+      - Keep technical terminology accurate
+
+      ## QUALITY REQUIREMENTS:
+      - ✅ Summarize ALL {count} items
+      - ✅ Each summary exactly 4-6 sentences
+      - ✅ All sources must have clickable markdown links
+
+feeds:
+  "AI & Tech":
+    "TechCrunch AI": "https://techcrunch.com/tag/artificial-intelligence/feed/"
+    "VentureBeat AI": "https://venturebeat.com/category/ai/feed/"
+    "MIT Technology Review": "https://www.technologyreview.com/feed/"
+    "Ars Technica AI": "https://arstechnica.com/tag/ai/feed/"
+    "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss"
+    "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+    "Engadget AI": "https://www.engadget.com/tag/ai/rss.xml"
+    "OpenAI Blog": "https://openai.com/blog/rss/"
+    "Google AI Blog": "https://blog.google/technology/ai/rss/"
+    "DeepMind Blog": "https://deepmind.google/blog/rss.xml"
+    "Meta AI Blog": "https://ai.meta.com/blog/rss/"
+    "Microsoft AI Blog": "https://blogs.microsoft.com/ai/feed/"
+    "arXiv AI": "https://rss.arxiv.org/rss/cs.AI"
+    "arXiv Machine Learning": "https://rss.arxiv.org/rss/cs.LG"
+  
+  "Finance":
+    "CNBC Finance": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
+    "WSJ Markets": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"
+    "Yahoo Finance": "https://finance.yahoo.com/news/rssindex"
+    "Reuters Business": "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best"
+    "Financial Times": "https://www.ft.com/?format=rss"
+    "MarketWatch": "https://feeds.content.dowjones.io/public/rss/mw_topstories"
+
+  "General":
+    "BBC World News": "https://feeds.bbci.co.uk/news/world/rss.xml"
+    "Reuters World": "https://www.reutersagency.com/feed/?best-topics=general-news&post_type=best"
+    "The Guardian World": "https://www.theguardian.com/world/rss"
+    "Associated Press": "https://news.google.com/rss/search?q=when:24h+allinurl:apnews.com&hl=en-US&gl=US&ceid=US:en"
+    "New York Times": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"

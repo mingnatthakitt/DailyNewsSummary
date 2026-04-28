@@ -7,6 +7,7 @@ import yaml
 from datetime import datetime
 import re
 import logging
+import time
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -66,7 +67,7 @@ def fetch_all_news():
 def stage1_selection(news_items):
     logger.info(f"Stage 1: Selecting top items from {len(news_items)} stories...")
     
-    formatted_news = "\n".join([f"[{item['id']}] {item['title']} - {item['source']}" for item in news_items])
+    formatted_news = "\n".join([f"[{item['id']}] Category: {item['group']} | {item['title']} - {item['source']}" for item in news_items])
     
     prompt = config['news']['stage1_prompt_template'].format(
         formatted_news=formatted_news,
@@ -221,6 +222,12 @@ def send_discord_notification(digest_text, articles):
             }
             
             r = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+            if r.status_code == 429:
+                # If we get rate limited anyway, wait the exact amount of time Discord asks
+                retry_after = r.json().get('retry_after', 1)
+                logger.warning(f"Rate limited. Sleeping for {retry_after}s")
+                time.sleep(retry_after)
+            time.sleep(1)
             if r.status_code not in [200, 204]:
                 logger.error(f"Discord error for '{article['title']}': {r.status_code} {r.text}")
         except Exception as e:

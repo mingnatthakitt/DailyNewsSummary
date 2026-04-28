@@ -97,19 +97,5 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('');
     }
 
-    discordBtn.addEventListener('click', () => {
-        const message = `
-HOW TO DISPATCH TO DISCORD:
-1. Open your GitHub Actions page.
-2. Select 'Daily News Update'.
-3. Click 'Run workflow' (Green button).
-
-The AI will generate the latest report and post it to Discord instantly.
-        `;
-        if (confirm(message)) {
-            window.open('https://github.com/mingnatthakitt/DailyNewsSummary/actions', '_blank');
-        }
-    });
-
     fetchNews();
 });

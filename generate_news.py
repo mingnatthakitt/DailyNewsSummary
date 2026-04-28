@@ -125,37 +125,48 @@ def stage2_summarization(selected_items):
 
 def parse_digest_to_articles(digest_text):
     articles = []
-    current_category = "General"
+    current_category = "General Intelligence"
     
-    lines = digest_text.split("\n")
-    current_article = None
+    # Split by double newlines to handle sections better
+    sections = re.split(r'\n(?=## )', digest_text)
     
-    for line in lines:
-        line = line.strip()
-        if not line: continue
+    for section in sections:
+        lines = section.strip().split("\n")
+        if not lines: continue
         
-        if line.startswith("## ") and not line.startswith("###"):
-            current_category = line.replace("## ", "").strip()
-        elif line.startswith("### "):
-            if current_article:
-                articles.append(current_article)
-            current_article = {
-                "title": line.replace("### ", "").strip(),
-                "summary": "",
+        # Check for category header
+        if lines[0].startswith("## "):
+            current_category = lines[0].replace("## ", "").strip()
+            lines = lines[1:] # Remove category line
+            
+        # Split section into individual articles by "### "
+        raw_articles = re.split(r'\n(?=### )', "\n".join(lines))
+        
+        for raw_art in raw_articles:
+            art_lines = raw_art.strip().split("\n")
+            if not art_lines or not art_lines[0].startswith("### "):
+                continue
+                
+            title = art_lines[0].replace("### ", "").strip()
+            summary = ""
+            url = "#"
+            
+            for line in art_lines[1:]:
+                if "Source:" in line:
+                    match = re.search(r'\[(.*?)\]\((.*?)\)', line)
+                    if match:
+                        url = match.group(2)
+                elif line.strip():
+                    summary += line.strip() + " "
+            
+            articles.append({
+                "title": title,
+                "summary": summary.strip(),
                 "category": current_category,
-                "url": ""
-            }
-        elif current_article:
-            if "Source:" in line:
-                match = re.search(r'\[(.*?)\]\((.*?)\)', line)
-                if match:
-                    current_article["url"] = match.group(2)
-            else:
-                current_article["summary"] += line + " "
+                "url": url
+            })
 
-    if current_article:
-        articles.append(current_article)
-        
+    logger.info(f"Successfully parsed {len(articles)} articles from digest.")
     return articles
 
 def send_discord_notification(digest_text, articles):
@@ -163,37 +174,39 @@ def send_discord_notification(digest_text, articles):
         logger.info("No Discord Webhook URL provided.")
         return
         
+    logger.info(f"Attempting to send {len(articles)} articles to Discord...")
+
     # Send a Header Message
     try:
-        requests.post(DISCORD_WEBHOOK_URL, json={
+        r = requests.post(DISCORD_WEBHOOK_URL, json={
             "content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**",
             "username": "The Thinking Times"
         })
-    except:
-        pass
+        logger.info(f"Header sent. Status: {r.status_code}")
+    except Exception as e:
+        logger.error(f"Failed to send header: {e}")
 
-    # Group articles into Embeds (Discord limit: 10 embeds per message, each max 6000 chars)
-    # We'll send them in batches of 5 for safety and clarity
     for i in range(0, len(articles), 5):
         batch = articles[i:i+5]
         embeds = []
         for article in batch:
             embeds.append({
                 "title": article['title'],
-                "description": article['summary'][:2000], # Discord limit
+                "description": article['summary'][:2000],
                 "url": article['url'],
-                "color": 3447003, # Deep Blue
+                "color": 3447003,
                 "footer": {"text": f"Category: {article['category']}"},
                 "timestamp": datetime.utcnow().isoformat()
             })
         
         try:
-            requests.post(DISCORD_WEBHOOK_URL, json={
+            r = requests.post(DISCORD_WEBHOOK_URL, json={
                 "embeds": embeds,
                 "username": "The Thinking Times"
             })
+            logger.info(f"Batch {i//5 + 1} sent. Status: {r.status_code}")
         except Exception as e:
-            logger.error(f"Discord error: {e}")
+            logger.error(f"Discord error in batch {i//5 + 1}: {e}")
 
 def main():
     logger.info("Starting The Thinking Times news generation...")

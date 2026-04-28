@@ -11,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchNews() {
         try {
-            const response = await fetch('news.json');
+            // Cache-busting with timestamp
+            const response = await fetch(`news.json?t=${new Date().getTime()}`);
             if (!response.ok) throw new Error('Failed to fetch news');
             
             const data = await response.json();

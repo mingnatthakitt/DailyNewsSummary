@@ -9,22 +9,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     dateDisplay.textContent = new Date().toLocaleDateString('en-US', options);
 
+    const liveTime = document.getElementById('live-time');
+    const tzToggle = document.getElementById('tz-toggle');
+    const stockTicker = document.getElementById('stock-ticker');
+    let currentTZ = 'HKT';
+
+    function updateClock() {
+        const now = new Date();
+        const options = {
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false, timeZone: currentTZ === 'HKT' ? 'Asia/Hong_Kong' : 'UTC'
+        };
+        if (liveTime) liveTime.textContent = now.toLocaleTimeString('en-US', options);
+    }
+
+    if (tzToggle) {
+        tzToggle.addEventListener('click', () => {
+            currentTZ = currentTZ === 'HKT' ? 'UTC' : 'HKT';
+            tzToggle.textContent = currentTZ;
+            updateClock();
+        });
+    }
+
+    setInterval(updateClock, 1000);
+    updateClock();
+
     async function fetchNews() {
         try {
-            // Cache-busting with timestamp
             const response = await fetch(`news.json?t=${new Date().getTime()}`);
             if (!response.ok) throw new Error('Failed to fetch news');
-            
             const data = await response.json();
-            renderLayout(data.articles);
+            renderLayout(data.articles, data.stocks);
         } catch (error) {
             console.error('Error:', error);
             featuredContainer.innerHTML = `<p style="padding: 2rem; text-align: center;">Unable to load news. Please ensure the GitHub Action has run successfully.</p>`;
         }
     }
 
-    function renderLayout(articles) {
+    function renderLayout(articles, stocks) {
         if (!articles || articles.length === 0) return;
+
+        // Render Stocks
+        if (stocks && stocks.length > 0 && stockTicker) {
+            stockTicker.innerHTML = stocks.map(s => `
+                <div class="stock-item">
+                    ${s.symbol} ${s.price} 
+                    <span class="${s.change >= 0 ? 'stock-up' : 'stock-down'}">
+                        ${s.change >= 0 ? '↑' : '↓'} ${Math.abs(s.change)}%
+                    </span>
+                </div>
+            `).join('');
+        }
 
         // 1. Featured Article (First one)
         const featured = articles[0];

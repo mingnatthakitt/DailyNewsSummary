@@ -9,7 +9,9 @@
         content="Stay updated with the latest in tech, finance, and general news, summarized by AI.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;700&family=UnifrakturMaguntia&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -19,11 +21,15 @@
     <header>
         <div class="container top-bar">
             <div class="top-left">
+                <div class="live-clock-container">
+                    <span class="live-dot"></span>
+                    <span id="live-time">00:00:00</span>
+                    <button id="tz-toggle" class="tz-toggle">HKT</button>
+                </div>
                 <p id="date-display"></p>
-                <p>Today's Paper</p>
             </div>
-            <div class="top-right">
-                <p>NVIDIA <span class="stock-up">+2.45% ↑</span></p>
+            <div id="stock-ticker" class="top-right stock-ticker">
+                <p>Thinker Loading...</p>
             </div>
         </div>
         <div class="container masthead">
@@ -53,13 +59,13 @@
                     <!-- News items injected here -->
                 </div>
             </aside>
-            
+
             <section class="center-col">
                 <div id="featured-news">
                     <!-- Featured news injected here -->
                 </div>
             </section>
-            
+
             <aside class="right-col">
                 <div id="general-news" class="column-section">
                     <h3 class="section-title">World & Market</h3>

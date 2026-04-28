@@ -74,13 +74,11 @@ news:
 feeds:
   "AI & Tech":
     "TechCrunch AI": "https://techcrunch.com/tag/artificial-intelligence/feed/"
-    "VentureBeat AI": "https://venturebeat.com/category/ai/feed/"
     "MIT Technology Review": "https://www.technologyreview.com/feed/"
     "Ars Technica AI": "https://arstechnica.com/tag/ai/feed/"
     "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss"
     "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
-    "Engadget AI": "https://www.engadget.com/tag/ai/rss.xml"
-    "OpenAI Blog": "https://openai.com/blog/rss/"
+    "OpenAI Blog": "https://openai.com/news/rss.xml"
     "Google AI Blog": "https://blog.google/technology/ai/rss/"
     "DeepMind Blog": "https://deepmind.google/blog/rss.xml"
     "Meta AI Blog": "https://ai.meta.com/blog/rss/"
@@ -92,13 +90,13 @@ feeds:
     "CNBC Finance": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
     "WSJ Markets": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"
     "Yahoo Finance": "https://finance.yahoo.com/news/rssindex"
-    "Reuters Business": "https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best"
+    "Reuters Business": "hhttps://ir.thomsonreuters.com/rss/news-releases.xml?items=15"
     "Financial Times": "https://www.ft.com/?format=rss"
     "MarketWatch": "https://feeds.content.dowjones.io/public/rss/mw_topstories"
 
   "General":
     "BBC World News": "https://feeds.bbci.co.uk/news/world/rss.xml"
-    "Reuters World": "https://www.reutersagency.com/feed/?best-topics=general-news&post_type=best"
+    "Reuters World": "http://feeds.reuters.com/Reuters/worldNews"
     "The Guardian World": "https://www.theguardian.com/world/rss"
     "Associated Press": "https://news.google.com/rss/search?q=when:24h+allinurl:apnews.com&hl=en-US&gl=US&ceid=US:en"
     "New York Times": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"

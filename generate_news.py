@@ -7,6 +7,7 @@ import yaml
 from datetime import datetime
 import re
 import logging
+import yfinance as yf
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -193,6 +194,23 @@ def send_discord_notification(digest_text, articles):
             })
         requests.post(DISCORD_WEBHOOK_URL, json={"embeds": embeds, "username": "The Thinking Times"})
 
+def fetch_stock_data():
+    symbols = ["NVDA", "AAPL", "MSFT", "TSLA", "GOOGL"]
+    stock_data = []
+    logger.info("Fetching stock data...")
+    for symbol in symbols:
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="2d")
+            if len(hist) >= 2:
+                price = hist['Close'].iloc[-1]
+                prev_price = hist['Close'].iloc[-2]
+                change = ((price - prev_price) / prev_price) * 100
+                stock_data.append({"symbol": symbol, "price": round(price, 2), "change": round(change, 2)})
+        except Exception as e:
+            logger.error(f"Error fetching stock {symbol}: {e}")
+    return stock_data
+
 def main():
     logger.info("Starting The Thinking Times news generation...")
     raw_news = fetch_all_news()
@@ -200,13 +218,15 @@ def main():
         logger.error("No news fetched. Exiting.")
         return
     
+    stocks = fetch_stock_data()
     selected = stage1_selection(raw_news)
     digest = stage2_summarization(selected)
     
     articles = parse_digest_to_articles(digest)
     output_data = {
         "last_updated": datetime.now().isoformat(),
-        "articles": articles
+        "articles": articles,
+        "stocks": stocks
     }
     
     with open("news.json", "w") as f:

@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // B. Tech Column (#tech-news)
         const techArticles = articles.filter(a => {
             const cat = a.category.toLowerCase();
-            return (cat.includes('ai') || cat.includes('model') || cat.includes('tech') || cat.includes('infrastructure')) 
+            return (cat.includes('artificial intelligence') || cat.includes('model') || cat.includes('tech') || cat.includes('infrastructure')) 
                    && !displayedTitles.has(a.title);
         }).slice(0, 5);
         techArticles.forEach(a => displayedTitles.add(a.title));

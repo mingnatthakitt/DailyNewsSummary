@@ -22,15 +22,21 @@ except Exception as e:
     exit(1)
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
-if not NVIDIA_API_KEY:
-    logger.error("NVIDIA_API_KEY not found in environment.")
+#if not NVIDIA_API_KEY: 
+#    logger.error("NVIDIA_API_KEY not found in environment.") 
+#    exit(1)
+
+if not GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY not found in environment.")
     exit(1)
 
 client = OpenAI(
-    base_url=config['llm']['base_url'],
-    api_key=NVIDIA_API_KEY
+    #base_url=config['llm']['base_url'],
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    api_key=GEMINI_API_KEY
 )
 
 def fetch_all_news():

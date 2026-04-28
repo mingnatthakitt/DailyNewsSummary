@@ -1,11 +1,4 @@
 {
-    "last_updated": "2024-04-29T00:00:00",
-    "articles": [
-        {
-            "title": "Welcome to Pulse",
-            "summary": "This is a placeholder for your daily news. Once your GitHub Action runs, this will be replaced with real-time AI summaries.",
-            "url": "#",
-            "category": "General"
-        }
-    ]
+    "last_updated": "2026-04-28T19:32:27.721946",
+    "articles": []
 }

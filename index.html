@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse | Daily AI News Summary</title>
+    <meta name="description" content="Stay updated with the latest in tech, finance, and general news, summarized by AI.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    
+    <header>
+        <div class="container">
+            <div class="logo">PULSE<span>.</span></div>
+            <p id="date-display"></p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="categories">
+            <button class="cat-btn active" data-category="all">All Stories</button>
+            <button class="cat-btn" data-category="tech">Tech</button>
+            <button class="cat-btn" data-category="finance">Finance</button>
+            <button class="cat-btn" data-category="general">General</button>
+        </section>
+
+        <section id="news-container" class="news-grid">
+            <!-- News items will be injected here -->
+            <div class="loader">
+                <div class="spinner"></div>
+                <p>Curating your daily digest...</p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Pulse News. Powered by Gemini AI.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

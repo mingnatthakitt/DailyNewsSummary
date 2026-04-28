@@ -67,9 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <article class="featured-article">
                 <span class="live-label">Featured Story</span>
                 <h2>${featured.title}</h2>
-                <div class="featured-image">
-                    <div class="watch-overlay">AI ANALYST INSIGHT</div>
-                </div>
                 <p>${featured.summary}</p>
                 <a href="${featured.url}" target="_blank" class="read-more">Read Full Article</a>
             </article>

@@ -170,29 +170,48 @@ def parse_digest_to_articles(digest_text):
     return articles
 
 def send_discord_notification(digest_text, articles):
-    if not DISCORD_WEBHOOK_URL: return
+    if not DISCORD_WEBHOOK_URL:
+        logger.warning("DISCORD_WEBHOOK_URL is not set. Skipping notification.")
+        return
         
-    logger.info(f"Sending dispatch to Discord (Parsed: {len(articles)})")
-    requests.post(DISCORD_WEBHOOK_URL, json={"content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**", "username": "The Thinking Times"})
+    masked_url = DISCORD_WEBHOOK_URL[:15] + "..." + DISCORD_WEBHOOK_URL[-5:]
+    logger.info(f"Sending dispatch to Discord (Parsed: {len(articles)}) via {masked_url}")
+
+    # Header
+    try:
+        requests.post(DISCORD_WEBHOOK_URL, json={
+            "content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**",
+            "username": "The Thinking Times"
+        })
+    except Exception as e:
+        logger.error(f"Failed to send header: {e}")
 
     if not articles:
+        logger.warning("No articles parsed. Sending raw digest as fallback.")
         chunks = [digest_text[i:i+1900] for i in range(0, len(digest_text), 1900)]
         for chunk in chunks:
             requests.post(DISCORD_WEBHOOK_URL, json={"content": chunk, "username": "The Thinking Times"})
         return
 
-    for i in range(0, len(articles), 5):
-        batch = articles[i:i+5]
-        embeds = []
-        for article in batch:
-            embeds.append({
-                "title": article['title'],
-                "description": article['summary'][:1000] + "...",
-                "url": article['url'],
-                "color": 3447003,
-                "footer": {"text": f"Category: {article['category']}"}
-            })
-        requests.post(DISCORD_WEBHOOK_URL, json={"embeds": embeds, "username": "The Thinking Times"})
+    # Send each article as its own embed to handle long summaries
+    for article in articles:
+        try:
+            payload = {
+                "username": "The Thinking Times",
+                "embeds": [{
+                    "title": article['title'],
+                    "description": article['summary'], # Up to 4096 chars
+                    "url": article['url'],
+                    "color": 3447003,
+                    "footer": {"text": f"Category: {article['category']}"},
+                    "timestamp": datetime.utcnow().isoformat()
+                }]
+            }
+            r = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+            if r.status_code not in [200, 204]:
+                logger.error(f"Discord error for '{article['title']}': {r.status_code} {r.text}")
+        except Exception as e:
+            logger.error(f"Failed to send article to Discord: {e}")
 
 def fetch_stock_data():
     symbols = ["NVDA", "AAPL", "MSFT", "TSLA", "GOOGL"]

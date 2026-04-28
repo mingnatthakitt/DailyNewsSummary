@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const generalContainer = document.getElementById('general-news');
     const financeContainer = document.getElementById('finance-news');
     const dateDisplay = document.getElementById('date-display');
-    const discordBtn = document.getElementById('discord-btn');
+
 
     // Set current date (NYT style)
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -50,52 +50,60 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderLayout(articles) {
         if (!articles || articles.length === 0) return;
 
-        // 1. Featured Article (First one)
+        // 1. Featured Article (Fills the 'global-news' div in your center column)
+        const globalContainer = document.getElementById('global-news');
         const featured = articles[0];
-        featuredContainer.innerHTML = `
+        
+        globalContainer.innerHTML = `
             <article class="featured-article">
-                <span class="live-label">Featured Story</span>
+                <span class="live-label">Top Intelligence</span>
                 <h2>${featured.title}</h2>
                 <p>${featured.summary}</p>
                 <a href="${featured.url}" target="_blank" class="read-more">Read Full Article</a>
             </article>
         `;
 
-        // Clear containers
+        // Clear the other containers
         techContainer.innerHTML = '';
         generalContainer.innerHTML = '';
         financeContainer.innerHTML = '';
 
-        // 2. Tech Intelligence (Left)
-        const techArticles = articles.filter(a => a.category.toLowerCase().includes('tech')).slice(0, 5);
-        techContainer.innerHTML = techArticles.map(article => `
-            <div class="news-item">
-                <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
-                <p>${article.summary.slice(0, 200)}...</p>
-                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
-            </div>
-        `).join('');
+        // Keep track of what we've shown so we don't repeat the featured story
+        const displayedTitles = new Set([featured.title]);
 
-        // 3. Global Dispatch (Center - below featured)
-        const globalArticles = articles.filter(a => a.category.toLowerCase().includes('general') || a.category.toLowerCase().includes('world')).slice(0, 5);
-        generalContainer.innerHTML = globalArticles.map(article => `
-            <div class="news-item">
-                <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
-                <p>${article.summary.slice(0, 200)}...</p>
-                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
-            </div>
-        `).join('');
+        // 2. Tech Intelligence (Left Column: id="tech-news")
+        const techArticles = articles.filter(a => {
+            const cat = a.category.toLowerCase();
+            return (cat.includes('tech') || cat.includes('model') || cat.includes('ai')) 
+                   && !displayedTitles.has(a.title);
+        }).slice(0, 5);
+        
+        techArticles.forEach(a => displayedTitles.add(a.title));
+        techContainer.innerHTML = techArticles.map(article => createNewsHTML(article)).join('');
 
-        // 4. Finance & Markets (Right)
-        const financeArticles = articles.filter(a => a.category.toLowerCase().includes('finance') || a.category.toLowerCase().includes('market')).slice(0, 5);
-        financeContainer.innerHTML = financeArticles.map(article => `
-            <div class="news-item">
-                <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
-                <p>${article.summary.slice(0, 200)}...</p>
-                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
-            </div>
-        `).join('');
+        // 3. Finance & Markets (Right Column: id="finance-news")
+        const financeArticles = articles.filter(a => {
+            const cat = a.category.toLowerCase();
+            return (cat.includes('finance') || cat.includes('market') || cat.includes('business'))
+                   && !displayedTitles.has(a.title);
+        }).slice(0, 5);
+        
+        financeArticles.forEach(a => displayedTitles.add(a.title));
+        financeContainer.innerHTML = financeArticles.map(article => createNewsHTML(article)).join('');
+
+        // 4. Global Dispatch (Center Column - below the line: id="general-news")
+        // Everything else goes here!
+        const catchAllArticles = articles.filter(a => !displayedTitles.has(a.title)).slice(0, 5);
+        generalContainer.innerHTML = catchAllArticles.map(article => createNewsHTML(article)).join('');
     }
 
-    fetchNews();
-});
+    // Keep this helper function outside or inside renderLayout
+    function createNewsHTML(article) {
+        return `
+            <div class="news-item">
+                <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
+                <p>${article.summary.slice(0, 200)}...</p>
+                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
+            </div>
+        `;
+    }

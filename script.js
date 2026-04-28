@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const featuredContainer = document.getElementById('featured-news');
     const techContainer = document.getElementById('tech-news');
     const generalContainer = document.getElementById('general-news');
+    const financeContainer = document.getElementById('finance-news');
     const dateDisplay = document.getElementById('date-display');
     const discordBtn = document.getElementById('discord-btn');
 
@@ -60,26 +61,38 @@ document.addEventListener('DOMContentLoaded', () => {
             </article>
         `;
 
-        // 2. Left Column (Tech Intelligence)
-        const techArticles = articles.filter(a => a.category.toLowerCase().includes('tech') || a.category.toLowerCase().includes('model')).slice(0, 5);
-        techContainer.innerHTML += techArticles.map(article => `
+        // Clear containers
+        techContainer.innerHTML = '';
+        generalContainer.innerHTML = '';
+        financeContainer.innerHTML = '';
+
+        // 2. Tech Intelligence (Left)
+        const techArticles = articles.filter(a => a.category.toLowerCase().includes('tech')).slice(0, 5);
+        techContainer.innerHTML = techArticles.map(article => `
             <div class="news-item">
-                <span class="live-label">LIVE</span>
                 <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
-                <ul class="bullet-points">
-                    <li>${article.summary.split('. ')[0]}.</li>
-                    <li>Industry Impact: High</li>
-                </ul>
+                <p>${article.summary.slice(0, 200)}...</p>
+                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
             </div>
         `).join('');
 
-        // 3. Right Column (World & Market)
-        const generalArticles = articles.filter(a => !techArticles.includes(a) && a !== featured).slice(0, 5);
-        generalContainer.innerHTML += generalArticles.map(article => `
+        // 3. Global Dispatch (Center - below featured)
+        const globalArticles = articles.filter(a => a.category.toLowerCase().includes('general') || a.category.toLowerCase().includes('world')).slice(0, 5);
+        generalContainer.innerHTML = globalArticles.map(article => `
             <div class="news-item">
                 <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
-                <p style="font-size: 0.85rem; color: #444;">${article.summary.slice(0, 100)}...</p>
-                <a href="${article.url}" target="_blank" style="font-size: 0.7rem; color: #666; text-decoration: none;">[${article.category}] Source &rarr;</a>
+                <p>${article.summary.slice(0, 200)}...</p>
+                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
+            </div>
+        `).join('');
+
+        // 4. Finance & Markets (Right)
+        const financeArticles = articles.filter(a => a.category.toLowerCase().includes('finance') || a.category.toLowerCase().includes('market')).slice(0, 5);
+        financeContainer.innerHTML = financeArticles.map(article => `
+            <div class="news-item">
+                <h4 onclick="window.open('${article.url}', '_blank')">${article.title}</h4>
+                <p>${article.summary.slice(0, 200)}...</p>
+                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
             </div>
         `).join('');
     }

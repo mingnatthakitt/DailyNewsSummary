@@ -33,7 +33,7 @@
                         <option value="5">UTC+5</option>
                         <option value="6">UTC+6</option>
                         <option value="7">UTC+7</option>
-                        <option value="8" selected>UTC+8 (HKT)</option>
+                        <option value="8" selected>UTC+8</option>
                         <option value="9">UTC+9</option>
                         <option value="10">UTC+10</option>
                         <option value="11">UTC+11</option>
@@ -66,32 +66,30 @@
                 <li>Daily AI News Summary</li>
             </ul>
         </nav>
-        <div class="container sub-nav">
-            <button id="discord-btn" class="discord-btn">DISPATCH TO DISCORD</button>
-        </div>
+
     </header>
 
     <main class="container">
         <div class="nyt-layout">
-            <aside class="left-col">
-                <div id="tech-news" class="column-section">
-                    <h3 class="section-title">Tech Intelligence</h3>
-                    <!-- News items injected here -->
-                </div>
-            </aside>
+            <!-- Left Column: Tech Intelligence -->
+            <div class="column-section left-col">
+                <h3 class="section-title">Tech Intelligence</h3>
+                <div id="tech-news"></div>
+            </div>
 
-            <section class="center-col">
-                <div id="featured-news">
-                    <!-- Featured news injected here -->
-                </div>
-            </section>
+            <!-- Center Column: Featured & Global -->
+            <div class="column-section center-col">
+                <div id="featured-news"></div>
+                <hr class="section-divider">
+                <h3 class="section-title">Global Dispatch</h3>
+                <div id="general-news"></div>
+            </div>
 
-            <aside class="right-col">
-                <div id="general-news" class="column-section">
-                    <h3 class="section-title">World & Market</h3>
-                    <!-- General news injected here -->
-                </div>
-            </aside>
+            <!-- Right Column: Finance & Markets -->
+            <div class="column-section right-col">
+                <h3 class="section-title">Finance & Markets</h3>
+                <div id="finance-news"></div>
+            </div>
         </div>
     </main>
 

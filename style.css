@@ -65,29 +65,28 @@ header {
     animation: pulse 1.5s infinite;
 }
 
-.tz-toggle {
-    background: #eee;
-    border: none;
-    padding: 2px 6px;
-    font-size: 0.6rem;
-    border-radius: 3px;
+.tz-select {
+    background: #f9f9f9;
+    border: 1px solid #ccc;
+    padding: 2px 4px;
+    font-size: 0.65rem;
+    font-family: var(--font-sans);
     cursor: pointer;
-    font-family: var(--font-mono);
+    border-radius: 2px;
 }
 
-.stock-ticker {
+.tz-select:hover {
+    border-color: var(--nyt-black);
+}
+
+.top-right {
     display: flex;
-    gap: 1.5rem;
     align-items: center;
-    overflow: hidden;
+    color: #666;
+    font-style: italic;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
 }
-
-.stock-item {
-    white-space: nowrap;
-}
-
-.stock-up { color: green; }
-.stock-down { color: var(--nyt-red); }
 
 @keyframes pulse {
     0% { opacity: 1; }

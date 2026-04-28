@@ -2,4 +2,3 @@ feedparser
 openai
 requests
 PyYAML
-yfinance

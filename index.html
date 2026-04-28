@@ -24,12 +24,38 @@
                 <div class="live-clock-container">
                     <span class="live-dot"></span>
                     <span id="live-time">00:00:00</span>
-                    <button id="tz-toggle" class="tz-toggle">HKT</button>
+                    <select id="tz-select" class="tz-select">
+                        <option value="0">UTC</option>
+                        <option value="1">UTC+1</option>
+                        <option value="2">UTC+2</option>
+                        <option value="3">UTC+3</option>
+                        <option value="4">UTC+4</option>
+                        <option value="5">UTC+5</option>
+                        <option value="6">UTC+6</option>
+                        <option value="7">UTC+7</option>
+                        <option value="8" selected>UTC+8 (HKT)</option>
+                        <option value="9">UTC+9</option>
+                        <option value="10">UTC+10</option>
+                        <option value="11">UTC+11</option>
+                        <option value="12">UTC+12</option>
+                        <option value="-1">UTC-1</option>
+                        <option value="-2">UTC-2</option>
+                        <option value="-3">UTC-3</option>
+                        <option value="-4">UTC-4</option>
+                        <option value="-5">UTC-5</option>
+                        <option value="-6">UTC-6</option>
+                        <option value="-7">UTC-7</option>
+                        <option value="-8">UTC-8</option>
+                        <option value="-9">UTC-9</option>
+                        <option value="-10">UTC-10</option>
+                        <option value="-11">UTC-11</option>
+                        <option value="-12">UTC-12</option>
+                    </select>
                 </div>
                 <p id="date-display"></p>
             </div>
-            <div id="stock-ticker" class="top-right stock-ticker">
-                <p>Thinker Loading...</p>
+            <div class="top-right">
+                <p>Digital Intelligence Dispatch</p>
             </div>
         </div>
         <div class="container masthead">
@@ -37,13 +63,7 @@
         </div>
         <nav class="container">
             <ul class="nav-links">
-                <li>AI</li>
-                <li>Agents</li>
-                <li>Research</li>
-                <li>Product</li>
-                <li>Infrastructure</li>
-                <li>Funding</li>
-                <li>Policy</li>
+                <li>Daily AI News Summary</li>
             </ul>
         </nav>
         <div class="container sub-nav">

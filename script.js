@@ -10,25 +10,25 @@ document.addEventListener('DOMContentLoaded', () => {
     dateDisplay.textContent = new Date().toLocaleDateString('en-US', options);
 
     const liveTime = document.getElementById('live-time');
-    const tzToggle = document.getElementById('tz-toggle');
-    const stockTicker = document.getElementById('stock-ticker');
-    let currentTZ = 'HKT';
-
+    const tzSelect = document.getElementById('tz-select');
+    
     function updateClock() {
         const now = new Date();
-        const options = {
-            hour: '2-digit', minute: '2-digit', second: '2-digit',
-            hour12: false, timeZone: currentTZ === 'HKT' ? 'Asia/Hong_Kong' : 'UTC'
-        };
-        if (liveTime) liveTime.textContent = now.toLocaleTimeString('en-US', options);
+        const offset = parseInt(tzSelect.value);
+        
+        // Calculate UTC time then apply offset
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const newDate = new Date(utc + (3600000 * offset));
+        
+        const h = String(newDate.getHours()).padStart(2, '0');
+        const m = String(newDate.getMinutes()).padStart(2, '0');
+        const s = String(newDate.getSeconds()).padStart(2, '0');
+        
+        if (liveTime) liveTime.textContent = `${h}:${m}:${s}`;
     }
 
-    if (tzToggle) {
-        tzToggle.addEventListener('click', () => {
-            currentTZ = currentTZ === 'HKT' ? 'UTC' : 'HKT';
-            tzToggle.textContent = currentTZ;
-            updateClock();
-        });
+    if (tzSelect) {
+        tzSelect.addEventListener('change', updateClock);
     }
 
     setInterval(updateClock, 1000);
@@ -39,27 +39,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`news.json?t=${new Date().getTime()}`);
             if (!response.ok) throw new Error('Failed to fetch news');
             const data = await response.json();
-            renderLayout(data.articles, data.stocks);
+            renderLayout(data.articles);
         } catch (error) {
             console.error('Error:', error);
-            featuredContainer.innerHTML = `<p style="padding: 2rem; text-align: center;">Unable to load news. Please ensure the GitHub Action has run successfully.</p>`;
+            featuredContainer.innerHTML = `<p style="padding: 2rem; text-align: center;">Unable to load news.</p>`;
         }
     }
 
-    function renderLayout(articles, stocks) {
+    function renderLayout(articles) {
         if (!articles || articles.length === 0) return;
-
-        // Render Stocks
-        if (stocks && stocks.length > 0 && stockTicker) {
-            stockTicker.innerHTML = stocks.map(s => `
-                <div class="stock-item">
-                    ${s.symbol} ${s.price} 
-                    <span class="${s.change >= 0 ? 'stock-up' : 'stock-down'}">
-                        ${s.change >= 0 ? '↑' : '↓'} ${Math.abs(s.change)}%
-                    </span>
-                </div>
-            `).join('');
-        }
 
         // 1. Featured Article (First one)
         const featured = articles[0];

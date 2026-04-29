@@ -2,7 +2,7 @@ name: Daily News Update
 
 on:
   schedule:
-    - cron: '0 1 * * *' # Runs at 01:00 UTC (09:00 HKT) every day
+    - cron: '17 1 * * *' # Runs at 01:00 UTC (09:00 HKT) every day
   workflow_dispatch: # Allows manual triggering
 
 permissions:

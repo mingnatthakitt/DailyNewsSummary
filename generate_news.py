@@ -233,32 +233,47 @@ async def send_via_bot(articles):
 
     logger.info("Dispatching via Bot...")
     intents = discord.Intents.default()
+    intents.message_content = True  # Required for sending certain types of content
+    intents.guilds = True
+    
     client_bot = discord.Client(intents=intents)
 
     @client_bot.event
     async def on_ready():
         target_channel_name = config['news'].get('discord_bot_channel', 'the-thinking-times')
-        logger.info(f"Bot logged in as {client_bot.user}. Broadcasting to #{target_channel_name}...")
+        logger.info(f"Bot logged in as {client_bot.user}")
+        logger.info(f"Connected to {len(client_bot.guilds)} guilds.")
         
+        if not client_bot.guilds:
+            logger.warning("Bot is not in any guilds! Invite it to a server first.")
+
         for guild in client_bot.guilds:
+            logger.info(f"Checking Guild: {guild.name} (ID: {guild.id})")
             channel = discord.utils.get(guild.text_channels, name=target_channel_name)
+            
+            if not channel:
+                # Fallback: look for a channel that contains the name
+                channel = next((c for c in guild.text_channels if target_channel_name in c.name), None)
+            
             if channel:
                 try:
+                    logger.info(f"Found channel #{channel.name} in {guild.name}. Sending...")
                     await channel.send("📰 **The Thinking Times: Daily AI Intelligence Dispatch**")
                     for article in articles:
                         embed_data = create_discord_embeds([article])[0]
                         embed = discord.Embed.from_dict(embed_data)
                         await channel.send(embed=embed)
-                        await asyncio.sleep(1)
-                    logger.info(f"Sent to {guild.name}")
+                        await asyncio.sleep(0.5)
+                    logger.info(f"Successfully sent to {guild.name}")
                 except Exception as e:
                     logger.error(f"Error sending to {guild.name}: {e}")
             else:
-                logger.warning(f"Channel #{target_channel_name} not found in {guild.name}")
+                logger.warning(f"Could not find channel #{target_channel_name} in {guild.name}. Available channels: {[c.name for c in guild.text_channels]}")
         
         await client_bot.close()
 
     try:
+        # Using wait_for or similar might be safer, but start() is okay for single-run
         await client_bot.start(DISCORD_BOT_TOKEN)
     except Exception as e:
         logger.error(f"Bot execution error: {e}")

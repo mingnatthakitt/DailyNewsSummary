@@ -8,6 +8,8 @@ from datetime import datetime
 import re
 import logging
 import time
+import asyncio
+import discord
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,17 +26,13 @@ except Exception as e:
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
-
-#if not NVIDIA_API_KEY: 
-#    logger.error("NVIDIA_API_KEY not found in environment.") 
-#    exit(1)
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY not found in environment.")
     exit(1)
 
 client = OpenAI(
-    #base_url=config['llm']['base_url'],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
     api_key=GEMINI_API_KEY
 )
@@ -148,7 +146,7 @@ def parse_digest_to_articles(digest_text):
         lines = section.split("\n")
         if lines[0].startswith("## "):
             current_category = lines[0].replace("## ", "").strip()
-
+ 
         # Split by articles (###)
         raw_articles = re.split(r'\n(?=### )', section)
         for raw_art in raw_articles:
@@ -179,67 +177,93 @@ def parse_digest_to_articles(digest_text):
                     "category": current_category, 
                     "url": url if url else "" # Use empty string instead of '#'
                 })
-
+ 
     logger.info(f"Successfully parsed {len(articles)} articles.")
     return articles
 
-def send_discord_notification(digest_text, articles):
-    if not DISCORD_WEBHOOK_URL:
-        logger.warning("DISCORD_WEBHOOK_URL is not set. Skipping notification.")
-        return
-        
-    masked_url = DISCORD_WEBHOOK_URL[:15] + "..." + DISCORD_WEBHOOK_URL[-5:]
-    logger.info(f"Sending dispatch to Discord (Parsed: {len(articles)}) via {masked_url}")
+def create_discord_embeds(articles):
+    embeds = []
+    for article in articles:
+        embed = {
+            "title": article['title'],
+            "description": article['summary'],
+            "color": 3447003,
+            "footer": {"text": f"Category: {article['category']}"},
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        if article['url'] and article['url'].startswith("http"):
+            embed["url"] = article['url']
+        embeds.append(embed)
+    return embeds
 
-    # Header
+def send_via_webhook(digest_text, articles):
+    if not DISCORD_WEBHOOK_URL:
+        return
+    
+    logger.info("Dispatching via Webhook...")
     try:
         requests.post(DISCORD_WEBHOOK_URL, json={
             "content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**",
             "username": "The Thinking Times"
         })
     except Exception as e:
-        logger.error(f"Failed to send header: {e}")
+        logger.error(f"Webhook header error: {e}")
 
     if not articles:
-        logger.warning("No articles parsed. Sending raw digest as fallback.")
         chunks = [digest_text[i:i+1900] for i in range(0, len(digest_text), 1900)]
         for chunk in chunks:
             requests.post(DISCORD_WEBHOOK_URL, json={"content": chunk, "username": "The Thinking Times"})
         return
 
-    # Send each article as its own embed to handle long summaries
     for article in articles:
         try:
-            embed = {
-                "title": article['title'],
-                "description": article['summary'],
-                "color": 3447003,
-                "footer": {"text": f"Category: {article['category']}"},
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            # ONLY add the URL if it actually looks like a link
-            if article['url'] and article['url'].startswith("http"):
-                embed["url"] = article['url']
-
-            payload = {
-                "username": "The Thinking Times",
-                "embeds": [embed]
-            }
-            
+            embed = create_discord_embeds([article])[0]
+            payload = {"username": "The Thinking Times", "embeds": [embed]}
             r = requests.post(DISCORD_WEBHOOK_URL, json=payload)
             if r.status_code == 429:
-                # If we get rate limited anyway, wait the exact amount of time Discord asks
                 retry_after = r.json().get('retry_after', 1)
-                logger.warning(f"Rate limited. Sleeping for {retry_after}s")
                 time.sleep(retry_after)
-            time.sleep(2)
-            if r.status_code not in [200, 204]:
-                logger.error(f"Discord error for '{article['title']}': {r.status_code} {r.text}")
+            time.sleep(1)
         except Exception as e:
-            logger.error(f"Failed to send article to Discord: {e}")
+            logger.error(f"Webhook article error: {e}")
 
-def main():
+async def send_via_bot(articles):
+    if not DISCORD_BOT_TOKEN:
+        return
+
+    logger.info("Dispatching via Bot...")
+    intents = discord.Intents.default()
+    client_bot = discord.Client(intents=intents)
+
+    @client_bot.event
+    async def on_ready():
+        target_channel_name = config['news'].get('discord_bot_channel', 'the-thinking-times')
+        logger.info(f"Bot logged in as {client_bot.user}. Broadcasting to #{target_channel_name}...")
+        
+        for guild in client_bot.guilds:
+            channel = discord.utils.get(guild.text_channels, name=target_channel_name)
+            if channel:
+                try:
+                    await channel.send("📰 **The Thinking Times: Daily AI Intelligence Dispatch**")
+                    for article in articles:
+                        embed_data = create_discord_embeds([article])[0]
+                        embed = discord.Embed.from_dict(embed_data)
+                        await channel.send(embed=embed)
+                        await asyncio.sleep(1)
+                    logger.info(f"Sent to {guild.name}")
+                except Exception as e:
+                    logger.error(f"Error sending to {guild.name}: {e}")
+            else:
+                logger.warning(f"Channel #{target_channel_name} not found in {guild.name}")
+        
+        await client_bot.close()
+
+    try:
+        await client_bot.start(DISCORD_BOT_TOKEN)
+    except Exception as e:
+        logger.error(f"Bot execution error: {e}")
+
+async def main():
     logger.info("Starting The Thinking Times news generation...")
     raw_news = fetch_all_news()
     if not raw_news:
@@ -248,8 +272,8 @@ def main():
     
     selected = stage1_selection(raw_news)
     digest = stage2_summarization(selected)
-    
     articles = parse_digest_to_articles(digest)
+    
     output_data = {
         "last_updated": datetime.now().isoformat(),
         "articles": articles
@@ -258,8 +282,11 @@ def main():
     with open("news.json", "w") as f:
         json.dump(output_data, f, indent=4)
         
-    send_discord_notification(digest, articles)
+    # Hybrid Dispatch
+    send_via_webhook(digest, articles)
+    await send_via_bot(articles)
+    
     logger.info("Process complete.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

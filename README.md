@@ -8,8 +8,11 @@
 
 The system operates as a "Senior Industry Analyst," transforming raw RSS feeds into a high-density, analytical news digest delivered via a **Hybrid Discord Notification System** (supporting both Webhooks and multi-server Bots) and a classic newspaper-style web interface.
 
-![discordbot](images/discordbot.png)
-![website](images/website.png)
+<p align="center">
+  <img src="images/discordbot.png" width="37%" />
+  <img src="images/website.png" width="61%" />
+</p>
+
 
 ## 🚀 System Architecture
 

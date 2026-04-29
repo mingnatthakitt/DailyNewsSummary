@@ -54,9 +54,9 @@ news:
 
       For each news item, provide:
       1. **Clear Headline**: Informative title
-      2. **Analytical Summary (150-200 words)**:
+      2. **Analytical Summary (100-200 words)**:
          - Provide a deep dive into the technical details and business implications.
-         - Minimum 150 words, maximum 200 words.
+         - Minimum 100 words, maximum 200 words.
          - Ensure the tone is senior and insightful.
       3. **Source Attribution**: [Source Name](URL)
 
@@ -67,7 +67,7 @@ news:
 
       ## QUALITY REQUIREMENTS:
       - ✅ Summarize ALL {count} items
-      - ✅ Each summary MUST BE between 150-200 words.
+      - ✅ Each summary MUST BE between 100-200 words.
       - ✅ All sources must have clickable markdown links
 
 feeds:

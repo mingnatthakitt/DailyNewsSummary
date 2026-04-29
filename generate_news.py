@@ -127,7 +127,7 @@ def stage2_summarization(selected_items):
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=10000
+            max_tokens=15000
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -233,7 +233,7 @@ def send_discord_notification(digest_text, articles):
                 retry_after = r.json().get('retry_after', 1)
                 logger.warning(f"Rate limited. Sleeping for {retry_after}s")
                 time.sleep(retry_after)
-            time.sleep(1)
+            time.sleep(2)
             if r.status_code not in [200, 204]:
                 logger.error(f"Discord error for '{article['title']}': {r.status_code} {r.text}")
         except Exception as e:

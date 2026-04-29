@@ -6,7 +6,10 @@
 
 **The Thinking Times** is an automated news aggregation and intelligence platform. It leverages Large Language Models (LLMs)—specifically **Gemini 3 Flash** or **Kimi K2.5** to fetch, curate, and summarize the most critical daily developments across Artificial Intelligence, Finance, and Global News. 
 
-The system operates as a "Senior Industry Analyst," transforming raw RSS feeds into a high-density, analytical news digest delivered via a Discord webhook and a classic newspaper-style web interface.
+The system operates as a "Senior Industry Analyst," transforming raw RSS feeds into a high-density, analytical news digest delivered via a **Discord webhook** and a classic newspaper-style web interface.
+
+![discordwebhookbot](images/discordwebhookbot.png)
+![website](images/website.png)
 
 ## 🚀 System Architecture
 
@@ -57,7 +60,7 @@ python generate_news.py
 This will generate `news.json` and send the intelligence dispatch to your Discord server.
 
 ### 4. GitHub Actions Automation
-The repository is designed to be fully automated using GitHub Actions. It can be scheduled to run daily, committing the updated `news.json` directly to the repository to update the live website.
+The repository is designed to be fully automated using GitHub Actions. It can be scheduled to run daily, it will commit the updated `news.json` directly to the repository to update the live website and send via Discord.
 
 ---
 

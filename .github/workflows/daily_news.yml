@@ -34,10 +34,7 @@ jobs:
         run: python generate_news.py
 
       - name: Commit and push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add news.json
-          git commit -m "Update daily news: $(date)" || echo "No changes to commit"
-          git pull --rebase origin main
-          git push origin main
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+            commit_message: "Update daily news: ${{ github.event.head_commit.timestamp }}"
+            file_pattern: 'news.json'

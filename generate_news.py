@@ -233,50 +233,65 @@ async def send_via_bot(articles):
 
     logger.info("Dispatching via Bot...")
     intents = discord.Intents.default()
-    intents.message_content = True  # Required for sending certain types of content
+    intents.message_content = True
     intents.guilds = True
     
     client_bot = discord.Client(intents=intents)
 
+    # Use a Future to signal when we're done
+    done = asyncio.Future()
+
     @client_bot.event
     async def on_ready():
-        target_channel_name = config['news'].get('discord_bot_channel', 'the-thinking-times')
-        logger.info(f"Bot logged in as {client_bot.user}")
-        logger.info(f"Connected to {len(client_bot.guilds)} guilds.")
-        
-        if not client_bot.guilds:
-            logger.warning("Bot is not in any guilds! Invite it to a server first.")
-
-        for guild in client_bot.guilds:
-            logger.info(f"Checking Guild: {guild.name} (ID: {guild.id})")
-            channel = discord.utils.get(guild.text_channels, name=target_channel_name)
+        try:
+            target_channel_name = config['news'].get('discord_bot_channel', 'the-thinking-times')
+            logger.info(f"Bot logged in as {client_bot.user}")
+            logger.info(f"Connected to {len(client_bot.guilds)} guilds.")
             
-            if not channel:
-                # Fallback: look for a channel that contains the name
-                channel = next((c for c in guild.text_channels if target_channel_name in c.name), None)
-            
-            if channel:
-                try:
-                    logger.info(f"Found channel #{channel.name} in {guild.name}. Sending...")
-                    await channel.send("📰 **The Thinking Times: Daily AI Intelligence Dispatch**")
-                    for article in articles:
-                        embed_data = create_discord_embeds([article])[0]
-                        embed = discord.Embed.from_dict(embed_data)
-                        await channel.send(embed=embed)
-                        await asyncio.sleep(0.5)
-                    logger.info(f"Successfully sent to {guild.name}")
-                except Exception as e:
-                    logger.error(f"Error sending to {guild.name}: {e}")
-            else:
-                logger.warning(f"Could not find channel #{target_channel_name} in {guild.name}. Available channels: {[c.name for c in guild.text_channels]}")
-        
-        await client_bot.close()
+            for guild in client_bot.guilds:
+                logger.info(f"Scanning Guild: {guild.name}")
+                channel = discord.utils.get(guild.text_channels, name=target_channel_name)
+                if not channel:
+                    channel = next((c for c in guild.text_channels if target_channel_name in c.name), None)
+                
+                if channel:
+                    try:
+                        logger.info(f"Found channel #{channel.name}. Sending...")
+                        await channel.send("📰 **The Thinking Times: Daily AI Intelligence Dispatch**")
+                        for article in articles:
+                            embed_data = create_discord_embeds([article])[0]
+                            embed = discord.Embed.from_dict(embed_data)
+                            await channel.send(embed=embed)
+                            await asyncio.sleep(0.5)
+                        logger.info(f"Sent to {guild.name}")
+                    except Exception as e:
+                        logger.error(f"Send error in {guild.name}: {e}")
+                else:
+                    logger.warning(f"No channel #{target_channel_name} found in {guild.name}")
+        finally:
+            if not done.done():
+                done.set_result(True)
 
+    async def run_bot():
+        try:
+            await client_bot.start(DISCORD_BOT_TOKEN)
+        except Exception as e:
+            logger.error(f"Bot start error: {e}")
+            if not done.done():
+                done.set_exception(e)
+
+    # Run bot with timeout
+    bot_task = asyncio.create_task(run_bot())
     try:
-        # Using wait_for or similar might be safer, but start() is okay for single-run
-        await client_bot.start(DISCORD_BOT_TOKEN)
+        await asyncio.wait_for(done, timeout=60)
+        logger.info("Bot dispatch finished successfully.")
+    except asyncio.TimeoutError:
+        logger.error("Bot dispatch timed out! (Check if 'Message Content Intent' is enabled in Discord Portal)")
     except Exception as e:
-        logger.error(f"Bot execution error: {e}")
+        logger.error(f"Bot error: {e}")
+    finally:
+        await client_bot.close()
+        bot_task.cancel()
 
 async def main():
     logger.info("Starting The Thinking Times news generation...")

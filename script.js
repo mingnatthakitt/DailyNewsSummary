@@ -74,7 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // B. Tech Column (#tech-news)
         const techArticles = articles.filter(a => {
             const cat = a.category.toLowerCase();
-            return (cat.includes('artificial intelligence') || cat.includes('model') || cat.includes('tech') || cat.includes('infrastructure')) 
+            return (cat.includes('artificial') || cat.includes('research') || cat.includes('product') || 
+                    cat.includes('technology') || cat.includes('open source'))
                    && !displayedTitles.has(a.title);
         }).slice(0, 5);
         techArticles.forEach(a => displayedTitles.add(a.title));
@@ -83,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // C. Finance Column (#finance-news)
         const financeArticles = articles.filter(a => {
             const cat = a.category.toLowerCase();
-            return (cat.includes('finance') || cat.includes('market') || cat.includes('policy'))
+            return (cat.includes('finance') || cat.includes('funding') || cat.includes('policy') || cat.includes('regulation'))
                    && !displayedTitles.has(a.title);
         }).slice(0, 5);
         financeArticles.forEach(a => displayedTitles.add(a.title));

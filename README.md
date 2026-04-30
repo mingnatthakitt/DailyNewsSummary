@@ -4,6 +4,12 @@
 ![Python Version](https://img.shields.io/badge/python-3.10-blue.svg) ![Build Status](https://github.com/mingnatthakitt/DailyNewsSummary/actions/workflows/daily_news.yml/badge.svg) ![AI Engine](https://img.shields.io/badge/AI-Gemini%203%20Flash-orange)
 ![Framework](https://img.shields.io/badge/Framework-OpenAI%20SDK-green)
 
+<div align="center">
+  <a href="https://discord.com/oauth2/authorize?client_id=1499052107180015697&permissions=377957210112&integration_type=0&scope=bot">
+    <img src="https://img.shields.io/badge/Discord-Try_our_bot-7289da?logo=discord&logoColor=white&style=for-the-badge" alt="Try our bot on discord">
+  </a>
+</div>
+
 **The Thinking Times** is an automated news aggregation and intelligence platform. It leverages Large Language Models (LLMs)—specifically **Gemini 3 Flash** or **Kimi K2.5** to fetch, curate, and summarize the most critical daily developments across Artificial Intelligence, Finance, and Global News. 
 
 The system operates as a "Senior Industry Analyst," transforming raw RSS feeds into a high-density, analytical news digest delivered via a **Hybrid Discord Notification System** (supporting both Webhooks and multi-server Bots) and a classic newspaper-style web interface.

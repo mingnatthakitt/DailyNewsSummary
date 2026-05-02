@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="news-item">
                 <h4 onclick="window.open('${article.url}', '_blank')" style="cursor:pointer">${article.title}</h4>
                 <p>${cleanSummary}</p>
-                <a href="${article.url}" target="_blank" class="source-link">Source: ${article.category}</a>
+                <a href="${article.url}" target="_blank" class="source-link">category: ${article.category}</a>
             </div>
         `;
     }

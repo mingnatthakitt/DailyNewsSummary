@@ -90,6 +90,6 @@ The repository runs daily at **08:13 HKT** via GitHub Actions. It commits the up
 ```
 ***
 
-Part of this project is inspired by [giftedunicorn/ai-news-both](https://github.com/giftedunicorn/ai-news-bot)
+Part of this project is inspired by [giftedunicorn/ai-news-bot](https://github.com/giftedunicorn/ai-news-bot)
 
 *&copy; 2026 The Thinking Times.*

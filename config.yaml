@@ -6,7 +6,7 @@ llm:
   model: "gemini-flash-latest"
 
 news:
-  max_items_per_source: 10
+  max_items_per_source: 3
   discord_bot_channel: "the-thinking-times"
   stage1_prompt_template: |
       {formatted_news}
@@ -42,14 +42,13 @@ news:
       Organize news items into relevant categories (use only categories that have news):
       1. **Artificial Intelligence**
       2. **Research & Academic Breakthroughs**
-      3. **Product Launches & Updates**
+      3. **Product Launches, Updates & Company Updates**
       4. **Technology*
       5. **Funding & Market Dynamics**
       6. **Policy & Regulation**
       7. **Open Source & Community**
       8. **Finance**
       9. **Global News**
-      10. **General**
 
       ## CONTENT REQUIREMENTS:
 
@@ -67,9 +66,10 @@ news:
       - Keep technical terminology accurate
 
       ## QUALITY REQUIREMENTS:
-      - ✅ Summarize ALL {count} items
+      - ✅ Summarize ALL {count} items.
       - ✅ Each summary MUST BE between 100-200 words.
-      - ✅ All sources must have clickable markdown links
+      - ✅ All sources must have clickable markdown links.
+      - ✅ All information in the summary must be factually correct and verified against the original article.
 
 feeds:
   "AI & Tech":

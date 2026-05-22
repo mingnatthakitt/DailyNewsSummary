@@ -6,7 +6,7 @@ llm:
   model: "gemini-flash-latest"
 
 news:
-  max_items_per_source: 3
+  max_items_per_source: 5
   discord_bot_channel: "the-thinking-times"
   stage1_prompt_template: |
       {formatted_news}

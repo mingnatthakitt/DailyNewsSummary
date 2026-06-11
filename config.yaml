@@ -1,9 +1,10 @@
 llm:
 #  provider: nvidia
 #  model: moonshotai/kimi-k2-instruct
+# model: "gemini-flash-latest"
 #  base_url: https://integrate.api.nvidia.com/v1
   base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  model: "gemini-flash-latest"
+  model: "gemma-4-31b-it"
 
 news:
   max_items_per_source: 5

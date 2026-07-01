@@ -25,17 +25,181 @@ except Exception as e:
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+PROVIDER_API_KEY = os.getenv("PROVIDER_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-if not GEMINI_API_KEY:
-    logger.error("GEMINI_API_KEY not found in environment.")
+# ── Provider auto-detection ────────────────────────────────────────────────────
+# Model name (from MODEL env > config.yaml) drives everything:
+#   - "nvidia"/"nemotron" in model name  → NVIDIA endpoint + NVIDIA_API_KEY
+#   - "gemma"/"gemini" in model name    → AI Studio endpoint + GEMINI_API_KEY
+#   - unknown model                      → PROVIDER_API_KEY + PROVIDER_BASE_URL (both required)
+#   - MODEL env not set                  → try MODEL env, then config.yaml, then hardcoded defaults
+
+HARDCODED_DEFAULTS = [
+    ("nvidia", "https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-ultra-550b-a55b", NVIDIA_API_KEY),
+    ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemma-4-31b-it", GEMINI_API_KEY),
+]
+
+PROVIDER_MODEL_PATTERNS = {
+    "nvidia": lambda m: "nvidia" in m.lower() or "nemotron" in m.lower(),
+    "gemini":  lambda m: "gemma" in m.lower() or "gemini" in m.lower(),
+}
+
+def _detect_from_model(model_name):
+    """Return (provider, base_url, api_key) for a given model name, or None."""
+    for provider, matcher in PROVIDER_MODEL_PATTERNS.items():
+        if matcher(model_name):
+            key = {"nvidia": NVIDIA_API_KEY, "gemini": GEMINI_API_KEY}.get(provider)
+            base = {"nvidia": "https://integrate.api.nvidia.com/v1",
+                    "gemini":  "https://generativelanguage.googleapis.com/v1beta/openai/"}.get(provider)
+            if key:
+                return provider, base, key
+    return None  # unknown provider — must use PROVIDER_* vars
+
+# Step 1: Resolve MODEL — env > config > hardcoded default
+_model_env = os.getenv("MODEL")
+_yaml_model = config.get('llm', {}).get('model')
+MODEL = _model_env or _yaml_model
+
+# Step 2: Determine provider based on resolved model name
+_active_provider = None
+BASE_URL = None
+API_KEY = None
+
+if MODEL:
+    detected = _detect_from_model(MODEL)
+    if detected:
+        _active_provider, BASE_URL, API_KEY = detected
+
+if _active_provider is None:
+    # Unknown model or MODEL not set — require PROVIDER_* vars
+    _pb = os.getenv("PROVIDER_BASE_URL")
+    _pk = PROVIDER_API_KEY
+    if _pb and _pk:
+        _active_provider = "provider"
+        BASE_URL = _pb
+        API_KEY = _pk
+        logger.info(f"Using custom provider: MODEL='{MODEL}', BASE_URL from PROVIDER_BASE_URL")
+    else:
+        # Step 3: Fall back through hardcoded (NVIDIA+Nemotron → AIStudio+Gemma)
+        for prov, base, model_d, key in HARDCODED_DEFAULTS:
+            if key:
+                _active_provider = prov
+                BASE_URL = base
+                MODEL = model_d
+                API_KEY = key
+                logger.info(f"No MODEL env/config — using hardcoded default: {prov.upper()} + {model_d}")
+                break
+
+if _active_provider is None or not API_KEY or not BASE_URL:
+    logger.error("Could not resolve provider. Set MODEL env (with nvidia/gemma in name), or PROVIDER_API_KEY + PROVIDER_BASE_URL.")
     exit(1)
 
+# Step 3: Log what we settled on
+logger.info(f"Provider: {_active_provider.upper()}")
+logger.info(f"Using base_url: {BASE_URL}")
+logger.info(f"Using model: {MODEL}")
+logger.info(f"API key source: {_active_provider.upper()}_API_KEY")
+
+MAX_RETRIES = 3
+BASE_BACKOFF = 2  # seconds
+DRY_RUN = os.getenv("DRY_RUN", "").lower() in ("1", "true", "yes")
+
+STORY_CACHE_DAYS = int(os.getenv("STORY_CACHE_DAYS", "7"))  # don't resend stories seen within this window
+STORY_CACHE_FILE = "story_cache.json"
+
+# ── Seen-story cache ────────────────────────────────────────────────────────────
+
+def _cache_age(date_str):
+    """Return approximate age of a cache entry in days."""
+    try:
+        cached = datetime.fromisoformat(date_str)
+        return (datetime.now() - cached).days
+    except Exception:
+        return 999
+
+def load_story_cache():
+    """Load the story URL→date cache. Returns dict of {url: iso_date_str}."""
+    if not os.path.exists(STORY_CACHE_FILE):
+        return {}
+    try:
+        with open(STORY_CACHE_FILE, "r") as f:
+            raw = json.load(f)
+        # Prune entries older than STORY_CACHE_DAYS while loading
+        cutoff = datetime.now().timestamp() - (STORY_CACHE_DAYS * 86400)
+        pruned = {
+            url: ts for url, ts in raw.items()
+            if datetime.fromisoformat(ts.replace("Z","+00:00")).timestamp() > cutoff
+               if STORY_CACHE_DAYS > 0
+        }
+        return pruned
+    except Exception as e:
+        logger.warning(f"Could not load story cache: {e}")
+        return {}
+
+def save_story_cache(cache):
+    """Save the story cache, pruning entries older than STORY_CACHE_DAYS."""
+    try:
+        with open(STORY_CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2)
+    except Exception as e:
+        logger.error(f"Could not save story cache: {e}")
+
+def filter_seen_stories(items, seen_cache):
+    """Drop items whose URL is in the seen_cache within STORY_CACHE_DAYS."""
+    skipped = 0
+    kept = []
+    for item in items:
+        url = item.get('url') or ""
+        if url and url in seen_cache:
+            age = _cache_age(seen_cache[url])
+            if age <= STORY_CACHE_DAYS:
+                skipped += 1
+                logger.debug(f"Skipped (seen {age}d ago): {item['title'][:60]}")
+                continue
+        kept.append(item)
+    if skipped:
+        logger.info(f"Story cache: skipped {skipped} already-seen stories (≤{STORY_CACHE_DAYS}d old).")
+    return kept
 client = OpenAI(
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    api_key=GEMINI_API_KEY
+    base_url=BASE_URL,
+    api_key=API_KEY
 )
+
+def normalize_title(title):
+    """Return a set of significant word tokens from a title for similarity comparison."""
+    t = title.lower()
+    t = re.sub(r'^(breaking|update|just in|exclusive|announcing):\s*', '', t)
+    t = re.sub(r'[^\w\s]', ' ', t)
+    stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had', 'do', 'does', 'did'}
+    tokens = {w for w in t.split() if w not in stopwords and len(w) > 2}
+    return tokens
+
+def jaccard_similarity(set_a, set_b):
+    """Jaccard similarity between two sets: |A∩B| / |A∪B|."""
+    if not set_a or not set_b:
+        return 0.0
+    return len(set_a & set_b) / max(len(set_a | set_b), 1)
+
+def deduplicate_items(items, threshold=0.7):
+    """Drop near-duplicate items (by title similarity > threshold), keeping the first-seen."""
+    unique = []
+    dropped = 0
+    for item in items:
+        item_norm = normalize_title(item['title'])
+        is_dup = any(
+            jaccard_similarity(item_norm, normalize_title(u['title'])) > threshold
+            for u in unique
+        )
+        if is_dup:
+            dropped += 1
+            logger.debug(f"Dropped duplicate: {item['title']}")
+        else:
+            unique.append(item)
+    if dropped:
+        logger.info(f"Deduplicated {dropped} items → kept {len(unique)} unique stories.")
+    return unique
 
 def fetch_all_news():
     all_items = []
@@ -66,6 +230,12 @@ def fetch_all_news():
                     count += 1
             except Exception as e:
                 logger.error(f"Error fetching {name}: {e}")
+
+    logger.info(f"Fetched {len(all_items)} raw items from all sources.")
+    all_items = deduplicate_items(all_items)
+    seen_cache = load_story_cache()
+    all_items = filter_seen_stories(all_items, seen_cache)
+    logger.info(f"After seen-story filter: {len(all_items)} fresh items.")
     return all_items
 
 def stage1_selection(news_items):
@@ -80,7 +250,7 @@ def stage1_selection(news_items):
     
     try:
         response = client.chat.completions.create(
-            model=config['llm']['model'],
+            model=MODEL,
             messages=[
                 {"role": "system", "content": "You are a professional news editor. Output ONLY a JSON array of IDs like ['ID-1', 'ID-2']."},
                 {"role": "user", "content": prompt}
@@ -88,7 +258,7 @@ def stage1_selection(news_items):
             temperature=0.2
         )
         content = response.choices[0].message.content.strip()
-        logger.info(f"Stage 1 Raw Output: {content[:100]}...")
+        logger.info(f"Stage 1 Raw Output: {content[:70]}...")
         
         # Super robust ID extraction
         selected_ids = re.findall(r'ID-\d+', content)
@@ -98,41 +268,109 @@ def stage1_selection(news_items):
             return news_items[:15]
             
         selected_items = [item for item in news_items if item['id'] in selected_ids]
+
+        # Hard cap: never summarize more than 20 items regardless of LLM output
+        if len(selected_items) > 20:
+            logger.warning(f"LLM returned {len(selected_items)} IDs — capping to 20.")
+            selected_items = selected_items[:20]
+
         logger.info(f"Selected {len(selected_items)} items.")
         return selected_items
     except Exception as e:
         logger.error(f"Stage 1 Error: {e}")
         return news_items[:15]
 
-def stage2_summarization(selected_items):
-    logger.info("Stage 2: Generating detailed summaries...")
-    
-    formatted_selected = "\n".join([
-        f"ID: {item['id']}\nTitle: {item['title']}\nSource: {item['source']}\nURL: {item['url']}\nContent: {item['description']}\n---" 
-        for item in selected_items
-    ])
-    
-    prompt = config['news']['stage2_prompt_template'].format(
-        count=len(selected_items),
-        selected_news=formatted_selected
+def summarize_single_item(item, category_hint):
+    """Summarize a single news item with exponential-backoff retry. Returns (success, article_dict)."""
+    # Adapt the stage2_prompt_template from config.yaml to a single-item prompt
+    single_item_text = (
+        f"ID: {item['id']}\n"
+        f"Title: {item['title']}\n"
+        f"Source: {item['source']}\n"
+        f"URL: {item['url']}\n"
+        f"Content: {item['description']}"
     )
-    
-    try:
-        response = client.chat.completions.create(
-            model=config['llm']['model'],
-            messages=[
-                {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. Follow the Markdown format strictly (## Category, ### Headline)."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=15000
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        logger.error(f"Stage 2 Error: {e}")
-        return "Error generating digest."
+    prompt = config['news']['stage2_prompt_template'].format(
+        count=1,
+        selected_news=single_item_text
+    )
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = client.chat.completions.create(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1024
+            )
+            content = response.choices[0].message.content.strip()
+            return True, {
+                "title": item['title'],
+                "summary": content,
+                "category": category_hint,
+                "url": item['url']
+            }
+        except Exception as e:
+            logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} failed for '{item['title'][:60]}': {e}")
+            if attempt < MAX_RETRIES:
+                backoff = BASE_BACKOFF * (2 ** (attempt - 1))
+                logger.info(f"  Retrying in {backoff}s...")
+                time.sleep(backoff)
 
-def parse_digest_to_articles(digest_text):
+    # Final fallback: basic summary
+    logger.error(f"  All {MAX_RETRIES} attempts failed for '{item['title'][:60]}'. Using fallback.")
+    fallback_summary = f"{item['description'][:300]}... [LLM summarization unavailable]."
+    return False, {
+        "title": item['title'],
+        "summary": fallback_summary,
+        "category": category_hint,
+        "url": item['url']
+    }
+
+def stage2_summarization(selected_items):
+    """Summarize selected items one at a time with retry logic. Returns (articles_list, digest_text, stats)."""
+    logger.info(f"Stage 2: Summarizing {len(selected_items)} items (per-article, with retry)...")
+    articles = []
+    successes = 0
+    failures = 0
+
+    for i, item in enumerate(selected_items, 1):
+        logger.info(f"  [{i}/{len(selected_items)}] Summarizing: {item['title'][:70]}...")
+        ok, article = summarize_single_item(item, item['group'])
+        if ok:
+            successes += 1
+        else:
+            failures += 1
+        articles.append(article)
+
+    logger.info(f"Stage 2 complete: {successes} successful, {failures} failed out of {len(selected_items)} items.")
+
+    # Rebuild a markdown digest text from the articles for webhook/bot use
+    digest_lines = ["# The Thinking Times — Daily Digest\n"]
+    current_cat = None
+    for article in articles:
+        if article['category'] != current_cat:
+            current_cat = article['category']
+            digest_lines.append(f"\n## {current_cat}\n")
+        digest_lines.append(f"### {article['title']}\n{article['summary']}\n**Source:** [{article.get('source','')}]({article['url']})\n")
+
+    return articles, "\n".join(digest_lines), {"successes": successes, "failures": failures}
+
+def parse_digest_to_articles(digest_or_articles):
+    """Parse LLM output into a list of article dicts.
+
+    New code path: if input is already a list of dicts (per-article structured results),
+    return it directly. If it's a raw text digest string, parse with the original regex logic.
+    """
+    # New structured path: stage2_summarization now returns per-article results directly
+    if isinstance(digest_or_articles, list):
+        logger.info(f"parse_digest_to_articles: received {len(digest_or_articles)} structured articles.")
+        return digest_or_articles
+
+    # Legacy text-parsing path (kept for backward compatibility)
+    digest_text = digest_or_articles
     articles = []
     current_category = "General Intelligence"
     
@@ -301,8 +539,8 @@ async def main():
         return
     
     selected = stage1_selection(raw_news)
-    digest = stage2_summarization(selected)
-    articles = parse_digest_to_articles(digest)
+    articles, digest, stage2_stats = stage2_summarization(selected)
+    logger.info(f"Stage 2 stats: {stage2_stats['successes']} succeeded, {stage2_stats['failures']} failed.")
     
     output_data = {
         "last_updated": datetime.now().isoformat(),
@@ -313,9 +551,22 @@ async def main():
         json.dump(output_data, f, indent=4)
         
     # Hybrid Dispatch
-    send_via_webhook(digest, articles)
-    await send_via_bot(articles)
-    
+    if DRY_RUN:
+        logger.info("[DRY-RUN] Discord dispatch skipped.")
+    else:
+        send_via_webhook(digest, articles)
+        await send_via_bot(articles)
+
+    # Update seen-story cache with the URLs dispatched this run
+    seen_cache = load_story_cache()
+    now = datetime.now().isoformat()
+    for article in articles:
+        url = article.get('url') or ""
+        if url:
+            seen_cache[url] = now
+    save_story_cache(seen_cache)
+    logger.info(f"Story cache updated with {len(articles)} URLs (window: {STORY_CACHE_DAYS}d).")
+
     logger.info("Process complete.")
 
 if __name__ == "__main__":

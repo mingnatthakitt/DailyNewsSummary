@@ -1,10 +1,10 @@
 llm:
 #  provider: nvidia
-#  model: moonshotai/kimi-k2-instruct
-# model: "gemini-flash-latest"
-#  base_url: https://integrate.api.nvidia.com/v1
-  base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
-  model: "gemma-4-31b-it"
+  base_url: "https://integrate.api.nvidia.com/v1"
+  model: "nvidia/nemotron-3-ultra-550b-a55b"
+#  base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+#  model: "gemma-4-31b-it"
+#  model: "gemini-flash-latest"
 
 news:
   max_items_per_source: 5
@@ -14,16 +14,23 @@ news:
 
       ## YOUR TASK - STAGE 1: NEWS SELECTION
 
-      You are a senior industry analyst. Analyze the {total_items} news items above and select exactly 15-20 of the highest-quality items.
+      You are a senior industry analyst. From the {total_items} news items above, select exactly 15-20 of the highest-quality items.
+
+      ### EMPHASIS WEIGHTING (apply this to your selection):
+      - 🟦 **AI & Tech — 60%** (9-12 items): Prioritize heavily. Deep technical breakthroughs, model releases, product launches, research papers, major company announcements, open-source milestones, and industry-shaping decisions.
+      - 🟩 **Finance — 25%** (4-5 items): Significant funding rounds (>$100M), M&A activity, major earnings surprises, interest rate or policy shifts affecting tech markets, and IPOs. Avoid routine market noise.
+      - 🟥 **Global News — 15%** (2-3 items): High-impact geopolitical events, international trade/tech policy, major world events with ripple effects on technology or markets. Do NOT skip these — set a hard minimum.
 
       ### SELECTION CRITERIA:
-      - ✅ Sector-Defining Events: Significant shifts in AI technology, global financial markets, or major geopolitical developments.
-      - ✅ Market & Economic Impact: Large funding rounds, M&A activities, interest rate shifts, or major earnings reports from tech/finance giants.
-      - ✅ Policy & Regulation: Important changes in government policy, AI safety regulations, or international trade agreements.
-      - ✅ Breakthroughs & Research: Groundbreaking technical papers or major product launches that change how industries operate.
-      - ✅ Balanced Category Coverage: Ensure the digest includes a mix of AI & Tech, Finance, and World News (General) to provide a complete picture of the day.
-      - ✅ High-Signal Sources: Prioritize high-authority reporting (e.g., Reuters, FT, WSJ) for world/finance news and primary sources for technical AI updates.
-      - ✅ Global Context: Include significant international stories that have broader implications beyond their home region.
+      - ✅ Sector-Defining Events: Significant shifts in AI technology, major product launches, or industry-changing decisions.
+      - ✅ Market & Economic Impact: Large funding rounds, M&A, earnings surprises from tech/finance giants.
+      - ✅ Policy & Regulation: Government AI policy, safety regulations, international trade agreements affecting tech.
+      - ✅ Breakthroughs & Research: Groundbreaking papers, model releases, or technical advances that change how industries operate.
+      - ✅ High-Signal Sources: Prioritize primary sources (company blogs, arXiv) and high-authority outlets (Reuters, FT, WSJ) for Finance/Global.
+      - ✅ NO Padding: Do NOT fill slots with generic or low-signal stories just to hit quotas.
+
+      ### GLOBAL NEWS HARD FLOOR:
+      Regardless of how few Global items appear above, you MUST include at least 2 high-impact global/geopolitical stories if any exist. These are never optional.
 
       ### OUTPUT FORMAT:
       Return ONLY a JSON array of selected news IDs. No explanations, no markdown, just the JSON array.
@@ -31,46 +38,66 @@ news:
       Example format:
       ["ID-1", "ID-5", "ID-12", ...]
 
-      CRITICAL: Select exactly 15-20 items.
+      CRITICAL: Select exactly 15-20 items. Prioritize Tech. Do not skip Global.
 
   stage2_prompt_template: |
       You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
 
       {selected_news}
 
-      ## OUTPUT STRUCTURE:
+      ## DIGEST EMPHASIS:
+      - 🟦 **AI & Tech — ~60% of summaries** — lead with technical depth, product analysis, research implications.
+      - 🟩 **Finance — ~25%** — focus on market impact, deal sizes, investor signals.
+      - 🟥 **Global News — ~15%** — prioritize stories with broad geopolitical or economic ripple effects.
 
-      Organize news items into relevant categories (use only categories that have news):
-      1. **Artificial Intelligence**
-      2. **Research & Academic Breakthroughs**
-      3. **Product Launches, Updates & Company Updates**
-      4. **Technology*
-      5. **Funding & Market Dynamics**
-      6. **Policy & Regulation**
-      7. **Open Source & Community**
-      8. **Finance**
-      9. **Global News**
+      ## OUTPUT STRUCTURE (use only categories that have news):
 
-      ## CONTENT REQUIREMENTS:
+      ### 🟦 ARTIFICIAL INTELLIGENCE
+      *(AI & Tech emphasis — lead with this section)*
 
-      For each news item, provide:
-      1. **Clear Headline**: Informative title
+      ### RESEARCH & ACADEMIC BREAKTHROUGHS
+      *(arXiv papers, fundamental advances, benchmark results)*
+
+      ### PRODUCT LAUNCHES, UPDATES & COMPANY NEWS
+      *(launches, releases, major company announcements)*
+
+      ### TECHNOLOGY
+      *(broader tech trends, infrastructure, developer tools)*
+
+      ### OPEN SOURCE & COMMUNITY
+      *(notable OSS projects, community milestones, standards)*
+
+      ### FUNDING & MARKET DYNAMICS
+      *(funding rounds, M&A, IPOs, market shifts)*
+
+      ### POLICY & REGULATION
+      *(government AI policy, safety rules, international agreements)*
+
+      ### FINANCE
+      *(earnings, macro signals, financial sector developments)*
+
+      ### 🟥 GLOBAL NEWS
+      *(high-impact geopolitical events, international developments with tech/market ripple effects — always include if present)*
+
+      ## CONTENT REQUIREMENTS (per item):
+      1. **Clear Headline**: Informative title that stands alone.
       2. **Analytical Summary (100-200 words)**:
-         - Provide a deep dive into the technical details and business implications.
+         - Deep dive into technical details and business/market implications.
          - Minimum 100 words, maximum 200 words.
-         - Ensure the tone is senior and insightful.
-      3. **Source Attribution**: [Source Name](URL)
+         - Senior, insightful tone — not news-wire reporting.
+      3. **Source Attribution**: [Source Name](URL) with a real clickable link.
 
       ## WRITING STYLE:
-      - Professional, analytical tone
-      - Include specific numbers and data points
-      - Keep technical terminology accurate
+      - Professional, analytical tone throughout.
+      - Include specific numbers, dates, and data points where available.
+      - Keep technical terminology precise.
 
       ## QUALITY REQUIREMENTS:
-      - ✅ Summarize ALL {count} items.
-      - ✅ Each summary MUST BE between 100-200 words.
+      - ✅ Summarize ALL {count} items — no skips.
+      - ✅ Each summary MUST be between 100-200 words.
       - ✅ All sources must have clickable markdown links.
-      - ✅ All information in the summary must be factually correct and verified against the original article.
+      - ✅ All facts must be verifiable against the original article.
+      - ✅ Global News is a hard minimum — never omit it if stories exist.
 
 feeds:
   "AI & Tech":

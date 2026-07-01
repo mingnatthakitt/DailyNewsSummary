@@ -280,9 +280,80 @@ def stage1_selection(news_items):
         logger.error(f"Stage 1 Error: {e}")
         return news_items[:15]
 
+# Patterns that indicate LLM returned placeholder/invalid output instead of a real summary
+GARBAGE_PATTERNS = [
+    re.compile(r'\*No relevant items', re.IGNORECASE),
+    re.compile(r'^#+\s*artificial intelligence\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*finance\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*global news\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*research\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*product launches?\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*technology\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*policy\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*open source\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^#+\s*funding\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'all\s+\d+\s+items?\s+are\s+excluded', re.IGNORECASE),
+    re.compile(r'no stories?(?:were)?\s*identified', re.IGNORECASE),
+    re.compile(r'the\s+digest\s+contains\s+no\s+items?', re.IGNORECASE),
+]
+
+# Canonical category name → normalized key (for matching LLM output headers)
+# Canonical category names — only aliases need mapping; canonical forms are stored as-is.
+CANONICAL_CATEGORIES = {
+    # Aliases → canonical
+    "PRODUCT LAUNCHES, UPDATES & COMPANY NEWS": "PRODUCT LAUNCHES & COMPANY NEWS",
+    "PRODUCT LAUNCHES AND COMPANY NEWS":         "PRODUCT LAUNCHES & COMPANY NEWS",
+    # Canonical forms — stored directly (identity)
+    "ARTIFICIAL INTELLIGENCE":         None,
+    "RESEARCH & ACADEMIC BREAKTHROUGHS": None,
+    "PRODUCT LAUNCHES & COMPANY NEWS":  None,
+    "TECHNOLOGY":                      None,
+    "OPEN SOURCE & COMMUNITY":          None,
+    "FUNDING & MARKET DYNAMICS":       None,
+    "POLICY & REGULATION":              None,
+    "FINANCE":                          None,
+    "GLOBAL NEWS":                      None,
+}
+
+def _parse_article_category(llm_output):
+    """Extract the canonical category from LLM output. Returns canonical name or None."""
+    lines = llm_output.split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            candidate = stripped[3:].strip()
+            if candidate in CANONICAL_CATEGORIES:
+                mapped = CANONICAL_CATEGORIES[candidate]
+                # Identity entry → value is None; return candidate directly
+                # Alias entry → value is the canonical name string
+                return mapped if mapped is not None else candidate
+            # Fuzzy match: uppercase, collapse whitespace (handles "  PRODUCT LAUNCHES  &  COMPANY NEWS")
+            key = " ".join(candidate.upper().split())
+            for known in CANONICAL_CATEGORIES:
+                if " ".join(known.upper().split()) == key:
+                    mapped = CANONICAL_CATEGORIES[known]
+                    return mapped if mapped is not None else known
+    return None
+
+def _is_valid_summary(text):
+    """Return True if text looks like a real summary, False if it's placeholder garbage."""
+    if not text or len(text.strip()) < 50:
+        return False
+    for pattern in GARBAGE_PATTERNS:
+        if pattern.search(text):
+            return False
+    return True
+
+def _strip_category_header(content):
+    """Remove the leading ## category header line from LLM output, if present."""
+    lines = content.split("\n")
+    if lines and lines[0].strip().startswith("## "):
+        return "\n".join(lines[1:]).lstrip("\n")
+    return content
+
+
 def summarize_single_item(item, category_hint):
     """Summarize a single news item with exponential-backoff retry. Returns (success, article_dict)."""
-    # Adapt the stage2_prompt_template from config.yaml to a single-item prompt
     single_item_text = (
         f"ID: {item['id']}\n"
         f"Title: {item['title']}\n"
@@ -291,7 +362,6 @@ def summarize_single_item(item, category_hint):
         f"Content: {item['description']}"
     )
     prompt = config['news']['stage2_prompt_template'].format(
-        count=1,
         selected_news=single_item_text
     )
     for attempt in range(1, MAX_RETRIES + 1):
@@ -306,10 +376,25 @@ def summarize_single_item(item, category_hint):
                 max_tokens=1024
             )
             content = response.choices[0].message.content.strip()
+
+            # Validate: reject placeholder/garbage output
+            if not _is_valid_summary(content):
+                logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} returned invalid output for '{item['title'][:60]}' — retrying...")
+                if attempt < MAX_RETRIES:
+                    backoff = BASE_BACKOFF * (2 ** (attempt - 1))
+                    time.sleep(backoff)
+                continue
+
+            # Extract the canonical category the LLM used
+            parsed_cat = _parse_article_category(content)
+            final_cat = parsed_cat if parsed_cat else category_hint
+            # Strip the ## header from the summary — category is saved separately
+            clean_summary = _strip_category_header(content)
+
             return True, {
                 "title": item['title'],
-                "summary": content,
-                "category": category_hint,
+                "summary": clean_summary,
+                "category": final_cat,
                 "url": item['url']
             }
         except Exception as e:
@@ -319,9 +404,9 @@ def summarize_single_item(item, category_hint):
                 logger.info(f"  Retrying in {backoff}s...")
                 time.sleep(backoff)
 
-    # Final fallback: basic summary
-    logger.error(f"  All {MAX_RETRIES} attempts failed for '{item['title'][:60]}'. Using fallback.")
-    fallback_summary = f"{item['description'][:300]}... [LLM summarization unavailable]."
+    # Final fallback: use raw description
+    logger.error(f"  All {MAX_RETRIES} attempts failed or returned garbage for '{item['title'][:60]}'. Using fallback.")
+    fallback_summary = f"({item['title']}: {item['description'][:250]}...) [LLM summarization unavailable]"
     return False, {
         "title": item['title'],
         "summary": fallback_summary,
@@ -370,52 +455,77 @@ def parse_digest_to_articles(digest_or_articles):
         return digest_or_articles
 
     # Legacy text-parsing path (kept for backward compatibility)
+    # Canonical category names — mirrors CANONICAL_CATEGORIES
+    KNOWN_CATEGORIES = {
+        "ARTIFICIAL INTELLIGENCE",
+        "RESEARCH & ACADEMIC BREAKTHROUGHS",
+        "PRODUCT LAUNCHES & COMPANY NEWS",
+        "PRODUCT LAUNCHES, UPDATES & COMPANY NEWS",
+        "PRODUCT LAUNCHES AND COMPANY NEWS",
+        "TECHNOLOGY",
+        "OPEN SOURCE & COMMUNITY",
+        "FUNDING & MARKET DYNAMICS",
+        "POLICY & REGULATION",
+        "FINANCE",
+        "GLOBAL NEWS",
+    }
+
+    def is_category_line(line):
+        """Return the canonical category name if line is a category header, else None."""
+        stripped = line.strip()
+        # Handle ## ARTIFICIAL INTELLIGENCE
+        if stripped.startswith("## "):
+            candidate = stripped[3:].strip()
+        else:
+            candidate = stripped
+        return candidate if candidate in KNOWN_CATEGORIES else None
+
     digest_text = digest_or_articles
     articles = []
-    current_category = "General Intelligence"
-    
-    # Split by categories (##)
-    sections = re.split(r'\n(?=## )', digest_text)
-    
-    for section in sections:
-        section = section.strip()
-        if not section: continue
-        
-        lines = section.split("\n")
-        if lines[0].startswith("## "):
-            current_category = lines[0].replace("## ", "").strip()
- 
-        # Split by articles (###)
-        raw_articles = re.split(r'\n(?=### )', section)
-        for raw_art in raw_articles:
-            raw_art = raw_art.strip()
-            if not raw_art or not raw_art.startswith("### "): continue
-                
-            art_lines = raw_art.split("\n")
-            title = art_lines[0].replace("### ", "").strip()
+    current_category = None  # None until first recognized category
+
+    # Line-by-line parser: handles both ## headers and plain category names
+    lines = digest_text.split("\n")
+    i = 0
+    while i < len(lines):
+        # Check for category header
+        cat_match = is_category_line(lines[i])
+        if cat_match:
+            current_category = cat_match
+            i += 1
+            continue
+
+        # Check for article title (### Title)
+        if lines[i].strip().startswith("### "):
+            title = lines[i].strip().replace("### ", "").strip()
             summary_parts = []
             url = None
-            
-            for line in art_lines[1:]:
-                # More robust URL extraction: looks for any http link in the line
+            i += 1
+            # Collect summary lines and URL until next ### or category or end
+            while i < len(lines):
+                line = lines[i]
+                # Stop at next article or category
+                if is_category_line(line) or line.strip().startswith("### "):
+                    break
                 link_match = re.search(r'https?://[^\s\)\>]+', line)
                 if link_match and not url:
                     url = link_match.group(0).rstrip('.,')
-                
-                # If it's not a category/header line, treat it as summary text
-                if line.strip() and not line.startswith("#"):
+                # Skip blank lines and section/ruler lines
+                if line.strip() and not line.startswith("#") and line.strip() not in ("---", "***"):
                     summary_parts.append(line.strip())
-            
+                i += 1
+
             summary = " ".join(summary_parts)
-            
             if title and summary:
                 articles.append({
-                    "title": title, 
-                    "summary": summary[:4000], # Discord limit safety
-                    "category": current_category, 
-                    "url": url if url else "" # Use empty string instead of '#'
+                    "title": title,
+                    "summary": summary[:4000],
+                    "category": current_category if current_category else "GLOBAL NEWS",
+                    "url": url if url else "",
                 })
- 
+        else:
+            i += 1
+
     logger.info(f"Successfully parsed {len(articles)} articles.")
     return articles
 

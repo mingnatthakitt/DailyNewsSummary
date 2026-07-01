@@ -254,12 +254,33 @@ nav {
     word-break: break-word;
 }
 
-.featured-article p {
-    font-size: 0.95rem;
-    line-height: 1.65;
-    color: #222;
-    white-space: pre-wrap;
+/* Clipped state — 280-char word-boundary cut */
+.summary-text.clipped {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
     word-break: break-word;
+}
+
+/* Expand / collapse button */
+.expand-btn {
+    background: none;
+    border: none;
+    color: #aa0000;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: var(--font-sans);
+}
+
+.expand-btn:hover {
+    text-decoration: underline;
 }
 
 /* Footer */

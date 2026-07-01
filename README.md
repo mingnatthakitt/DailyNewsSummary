@@ -30,15 +30,17 @@ The project is divided into an automated backend processing pipeline and a clean
 * **Deduplication**: Near-duplicate stories (Jaccard similarity > 0.7 on normalized titles) are collapsed before stage 1, keeping the first-seen item.
 * **Seen-Story Cache**: Stories dispatched in the last 7 days (URL-based) are automatically skipped. Configurable via `STORY_CACHE_DAYS`. Persisted to `story_cache.json`.
 * **Stage 1: Weighted Selection** (60/25/15): The LLM evaluates stories with explicit weighting — AI & Tech at ~60%, Finance ~25%, Global ~15%. A hard minimum ensures Global News is never skipped. Output capped at 20 items max.
-* **Stage 2: Per-Article Summarization with Retry**: Each selected item is summarized individually (100–200 words) with exponential backoff (3 attempts: 2s → 4s → 8s). A failed item falls back to a truncated raw description rather than dropping the whole digest.
-* **Hybrid Dispatch**: Simultaneously broadcasts to a single-channel **Webhook** and a multi-server **Discord Bot**.
-* **Automated Parsing**: Regex-based parser extracts structured articles into `news.json`.
+* **Stage 2: Per-Article Summarization with Retry**: Each selected item is summarized individually (100–150 words) with exponential backoff (3 attempts: 2s → 4s → 8s). A failed item falls back to a truncated raw description rather than dropping the whole digest.
+* **LLM Self-Categorization**: The LLM assigns each article to one of **9 canonical categories**: `ARTIFICIAL INTELLIGENCE`, `RESEARCH & ACADEMIC BREAKTHROUGHS`, `PRODUCT LAUNCHES & COMPANY NEWS`, `TECHNOLOGY`, `OPEN SOURCE & COMMUNITY`, `FUNDING & MARKET DYNAMICS`, `POLICY & REGULATION`, `FINANCE`, `GLOBAL NEWS`. The `## ` category header is parsed and stripped from the summary; only the clean summary text is saved to `news.json`.
+* **Garbage Output Rejection**: LLM summaries are validated against 13 placeholder/garbage patterns. Output shorter than 50 chars or matching any pattern triggers an automatic retry.
+* **Hybrid Dispatch**: Simultaneously broadcasts to a single-channel **Webhook** and a multi-server **Discord Bot**. Discord embeds show the canonical category name in the footer (e.g., `"Category: FUNDING & MARKET DYNAMICS"`).
 
 ### 2. Frontend Interface (`index.html` / `script.js`)
-* **NYT-Style Layout**: A three-column grid organizing news into *Tech Intelligence*, *Global Dispatch*, and *Finance & Markets*.
-* **Smart Category Detection**: Articles are classified by keyword analysis of title + summary content (not just the `category` field), ensuring more accurate placement across Tech, Finance, and General columns.
-* **Clean Summary Rendering**: All LLM-generated markdown is stripped server-side before display — no `## headers`, `**bold**`, or `[link](url)` syntax appears. Full summaries render inline without character clipping.
-* **Live Intelligence Tools**: Includes a real-time world clock with UTC offset selection for global analysts.
+* **NYT-Style Layout**: A three-column grid — **Left**: Finance & Markets · **Center**: AI & Tech · **Right**: Global News + Featured article.
+* **Dual-Layer Category Detection**: Articles are first classified by the **LLM-chosen canonical category** saved in `news.json`. Regex-based keyword analysis of title + summary acts as a secondary layer for articles where the LLM category falls outside the three display columns (e.g., `RESEARCH & ACADEMIC BREAKTHROUGHS` → Tech column).
+* **Clean Summary Rendering**: LLM markdown (`## headers`, `**bold**`, `[links](url)`, orphaned category words) is stripped before display. Summaries are clipped at 280 chars (news items) or 400 chars (featured) with a "Read more" expand/collapse toggle.
+* **Short Category Labels**: Each card shows a compact label ("AI", "Markets", "Launches", "OSS", "Research") derived from the canonical category, not the raw RSS group.
+* **Live Intelligence Tools**: Real-time world clock with UTC offset selection (UTC−12 to UTC+12).
 
 ## 🛠️ Technical Stack
 
@@ -142,6 +144,21 @@ The repository runs daily at **08:13 HKT** via GitHub Actions. It commits the up
 | Retry attempts | `MAX_RETRIES` | `3` | Per-article LLM call retries |
 | Base backoff | `BASE_BACKOFF` | `2s` | Initial backoff interval (doubles each retry) |
 | Near-duplicate threshold | `DEDUP_THRESHOLD` | `0.7` | Jaccard similarity above which stories are collapsed |
+
+### Canonical Categories
+Articles are self-categorized by the LLM into one of 9 categories, saved to `news.json`:
+
+| Canonical Category | Frontend Column |
+|---|---|
+| `ARTIFICIAL INTELLIGENCE` | AI & Tech (center) |
+| `RESEARCH & ACADEMIC BREAKTHROUGHS` | AI & Tech (center) |
+| `PRODUCT LAUNCHES & COMPANY NEWS` | AI & Tech (center) |
+| `TECHNOLOGY` | AI & Tech (center) |
+| `OPEN SOURCE & COMMUNITY` | AI & Tech (center) |
+| `POLICY & REGULATION` | AI & Tech (center) |
+| `FUNDING & MARKET DYNAMICS` | Finance (left) |
+| `FINANCE` | Finance (left) |
+| `GLOBAL NEWS` | Global (right) |
 
 ***
 

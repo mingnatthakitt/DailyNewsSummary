@@ -27,46 +27,73 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
 
     // ── 3. MARKDOWN STRIPPER ───────────────────────────────────────────────────
-    // Removes markdown headers, emphasis, links, bullets — returns plain text
+    // Strips all markdown noise — headers, bold, links, bullets, placeholders — returns clean prose
     function stripMarkdown(text) {
         if (!text) return '';
         return text
-            // Remove ATX headers (## ### etc.)
-            .replace(/^#{1,6}\s+(?:[🏦-🟥🔴]?\s*)?\*?[^*]*\*?\s*$/gm, '')
+            // Remove ATX headers (single-line, any level)
+            .replace(/^#{1,6}[ \t]+[^\n]*/gm, '')
+            // Remove setext-style underlines
+            .replace(/^={3,}[ \t]*$/gm, '')
+            .replace(/^-{3,}[ \t]*$/gm, '')
             // Remove blockquotes
-            .replace(/^>\s*/gm, '')
+            .replace(/^>[ \t]*/gm, '')
             // Remove horizontal rules
-            .replace(/^[-*_]{3,}\s*$/gm, '')
-            // Remove inline bold/italic
-            .replace(/\*\*([^*]+)\*\*/g, '$1')
-            .replace(/\*([^*]+)\*/g, '$1')
-            .replace(/__([^_]+)__/g, '$1')
-            .replace(/_([^_]+)_/g, '$1')
+            .replace(/^[-*_]{3,}[ \t]*$/gm, '')
+            // Bold/italic markers — keep text
+            .replace(/\*\*\s*([^*]+?)\s*\*\*/g, '$1')
+            .replace(/\*\s*([^*]+?)\s*\*/g, '$1')
+            .replace(/__\s*([^_]+?)\s*__/g, '$1')
+            .replace(/_\s*([^_]+?)_\s*/g, '$1')
+            // Standalone bold lines that are really headlines
+            .replace(/^\*\*([^*]+)\*\*[ \t]*$/gm, '$1')
+            .replace(/^__([^_]+)__[ \t]*$/gm, '$1')
             // Remove link syntax — keep link text
             .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
             // Remove image syntax
             .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
-            // Remove list markers (-, *, 1.)
-            .replace(/^[\-\*\+]\s+/gm, '')
-            .replace(/^\d+\.\s+/gm, '')
-            // Remove "No relevant items" placeholders
+            // Remove list markers
+            .replace(/^[\-\*\+][ \t]+/gm, '')
+            .replace(/^\d+\.[ \t]+/gm, '')
+            // Remove placeholder/garbage patterns
             .replace(/\*No relevant items for this digest\.\*/gi, '')
             .replace(/\*No [^\n]+for this digest\.\*/gi, '')
-            // Collapse 2+ newlines into one paragraph break
-            .replace(/\n{2,}/g, '\n')
+            .replace(/no relevant items.*/gi, '')
+            .replace(/all \d+ items are excluded.*/gi, '')
+            .replace(/no stories?(?:were)? identified.*/gi, '')
+            .replace(/the digest contains no items?.*/gi, '')
+            // Remove orphaned category header words that survive the above
+            .replace(/^ARTIFICIAL INTELLIGENCE$/gim, '')
+            .replace(/^FINANCE$/gim, '')
+            .replace(/^GLOBAL NEWS$/gim, '')
+            .replace(/^RESEARCH[ &]ACADEMIC[ &]BREAKTHROUGHS$/gim, '')
+            .replace(/^PRODUCT LAUNCHES[ ,]?UPDATES[, &]* ?COMPANY NEWS$/gim, '')
+            .replace(/^TECHNOLOGY$/gim, '')
+            .replace(/^OPEN SOURCE[ &]COMMUNITY$/gim, '')
+            .replace(/^FUNDING[ &]MARKET DYNAMICS$/gim, '')
+            .replace(/^POLICY[ &]REGULATION$/gim, '')
+            // Collapse multiple blank lines
+            .replace(/\n{3,}/g, '\n\n')
             .trim();
     }
 
     // ── 4. NEWS ITEM HTML ──────────────────────────────────────────────────────
+    function escAttr(str) {
+        return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function createNewsHTML(article) {
-        const raw      = article.summary || '';
-        const plain    = stripMarkdown(raw);
-        const catLabel = (article.category || 'General').split(' ')[0]; // first word only
+        const raw     = article.summary || '';
+        const plain   = stripMarkdown(raw);
+        const clipped = plain.length > 280
+            ? plain.slice(0, 280).replace(/\s\S+$/, '') + '…'
+            : plain;
         return `
-            <div class="news-item">
-                <h4 onclick="window.open('${article.url}', '_blank')" style="cursor:pointer">${article.title}</h4>
-                <p class="summary-text">${plain}</p>
-                <a href="${article.url}" target="_blank" class="source-link">${catLabel}</a>
+            <div class="news-item" data-full="${escAttr(plain)}" data-clipped="${escAttr(clipped)}">
+                <h4 onclick="window.open('${escAttr(article.url)}', '_blank')" style="cursor:pointer">${article.title}</h4>
+                <p class="summary-text clipped">${clipped}</p>
+                <a href="${escAttr(article.url)}" target="_blank" class="source-link">${catLabel(article.category || 'General')}</a>
+                <button class="expand-btn" onclick="toggleExpand(this)">Read more</button>
             </div>
         `;
     }
@@ -75,35 +102,80 @@ document.addEventListener('DOMContentLoaded', () => {
     function createFeaturedHTML(article) {
         const raw   = article.summary || '';
         const plain = stripMarkdown(raw);
+        const clipped = plain.length > 400
+            ? plain.slice(0, 400).replace(/\s\S+$/, '') + '…'
+            : plain;
         return `
-            <article class="featured-article">
-                <span class="live-label">Top Intelligence</span>
-                <h2>${article.title}</h2>
-                <p>${plain}</p>
-                <a href="${article.url}" target="_blank" class="read-more">Read Full Article</a>
-            </article>
+            <div class="news-item" data-full="${escAttr(plain)}" data-clipped="${escAttr(clipped)}">
+                <h4 onclick="window.open('${escAttr(article.url)}', '_blank')" style="cursor:pointer">${article.title}</h4>
+                <p class="summary-text clipped">${clipped}</p>
+                <a href="${escAttr(article.url)}" target="_blank" class="source-link">Source</a>
+                <button class="expand-btn" onclick="toggleExpand(this)">Read more</button>
+            </div>
         `;
     }
 
+    // ── 5b. EXPAND / COLLAPSE ─────────────────────────────────────────────────
+    // Stored as plain text (already HTML-attribute-safe via escAttr) — never encode/decode.
+    window.toggleExpand = function(btn) {
+        const item = btn.closest('.news-item');
+        const p    = item.querySelector('.summary-text');
+        if (p.classList.contains('clipped')) {
+            p.textContent = item.dataset.full || '';
+            p.classList.remove('clipped');
+            btn.textContent = 'Show less';
+        } else {
+            p.textContent = item.dataset.clipped || '';
+            p.classList.add('clipped');
+            btn.textContent = 'Read more';
+        }
+    };
+
     // ── 6. CATEGORY MATCHERS ───────────────────────────────────────────────────
-    // Returns true if the article text (title + summary) matches the given domain.
+    // Canonical category names saved by generate_news.py via LLM self-categorization.
+    const FINANCE_CATS = new Set(['finance', 'funding & market dynamics']);
+    const GLOBAL_CATS  = new Set(['global news', 'general', 'world']);
+    const TECH_CATS    = new Set(['artificial intelligence', 'research & academic breakthroughs',
+                                   'product launches & company news', 'technology',
+                                   'open source & community', 'policy & regulation']);
+
+    // Short labels shown as the source-link text on each news card.
+    const CAT_LABELS = {
+        'artificial intelligence':              'AI',
+        'research & academic breakthroughs':    'Research',
+        'product launches & company news':      'Launches',
+        'technology':                          'Tech',
+        'open source & community':             'OSS',
+        'funding & market dynamics':           'Markets',
+        'policy & regulation':                 'Policy',
+        'finance':                             'Finance',
+        'global news':                         'Global',
+    };
+
+    function catLabel(cat) {
+        return CAT_LABELS[cat.toLowerCase()] || cat.split(' ')[0];
+    }
+
     function isTech(article) {
+        const cat = (article.category || '').toLowerCase();
+        if (TECH_CATS.has(cat)) return true;
         const t = (article.title + ' ' + article.summary).toLowerCase();
-        return /\b(ai|artificial intelligen|model|llm|gpt|gemini|claude|openai|anthropic|deepmind|google ai|microsoft ai|meta ai|neural network|machine learning|deep learning|research paper|arxiv|benchmark|open.?source|github|framework|library|algorithm|robot|agentic|rag|token| GPU |cuda|inference|train|data center|infrastructure)\b/.test(t);
+        return /\b(ai|artificial intelligen|model|llm|gpt|gemini|claude|openai|anthropic|deepmind|google ai|microsoft ai|meta ai|neural network|machine learning|deep learning|research paper|arxiv|benchmark|open.?source|github|framework|library|algorithm|robot|agentic|rag|token| gpu |cuda|inference|train|data center|infrastructure)\b/.test(t);
     }
 
     function isFinance(article) {
-        const t = (article.title + ' ' + article.summary).toLowerCase();
         const cat = (article.category || '').toLowerCase();
-        return /\b(finance|market|stocks|equity|bond|interest rate|fed|central bank|inflation| earnings |revenue|profit|loss|funding|investment|investor|ipo|merger|acquisition|debt|loan|bank|credit|portfolio|valuation|dividend|etf|hedge fund|quarterly|sec|regulatory)\b/.test(t)
-            || cat.includes('finance') || cat.includes('market');
+        if (FINANCE_CATS.has(cat)) return true;
+        const t = (article.title + ' ' + article.summary).toLowerCase();
+        // Trailing (?: |$) makes space optional — handles end-of-sentence with no trailing space
+        return /\b(stocks?|equities?|bonds?|interest rates?|federal reserve|fed(?: |$)|central bank|inflation|deflation|earnings report|quarterly results|ipo(?: |$)|stock price|share price|market cap|wall street|dow jones|s&p(?: |$)|nasdaq|nyse(?: |$)|trading session|traded (?:up|down)(?: |$)|fell(?: |$)|rose(?: |$)|slumped(?: |$)|surged(?: |$)|market rout|market crash)\b/.test(t);
     }
 
     function isGlobal(article) {
-        const t = (article.title + ' ' + article.summary).toLowerCase();
         const cat = (article.category || '').toLowerCase();
-        return /\b(geopolitic|war|conflict|diplomat|embargo|sanction|climate|energy| treaty |summit|g20|nato|un |security council|human right|refugee|terrorism|nuclear|iran|china|russia|ukraine|middle east|africa|asia|europe|americas|world|international|global)\b/.test(t)
-            || cat.includes('general') || cat.includes('world');
+        if (GLOBAL_CATS.has(cat)) return true;
+        const t = (article.title + ' ' + article.summary).toLowerCase();
+        return /\b(geopolitic|war\b|conflict|diplomat|embargo|sanction|climate|energy policy| treaty(?:\b| )|summit|g20|nato\b|un(?:\b| )|security council|human rights?\b|refugee|terrorism|nuclear program|iran\b|china\b|russia\b|ukraine\b|middle east|africa\b|asia pacific|europe\b|americas\b|world\b|international|global\b)\b/.test(t);
     }
 
     // ── 7. FETCH & RENDER ─────────────────────────────────────────────────────
@@ -124,37 +196,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderLayout(articles) {
         if (!articles || articles.length === 0) return;
 
-        // ── A. Featured: first article ─────────────────────────────────────────
+        // Featured = first article (right column)
         const featured = articles[0];
         if (featuredContainer) featuredContainer.innerHTML = createFeaturedHTML(featured);
 
         const shown = new Set([featured.title, featured.url]);
 
-        // ── B. Tech column ─────────────────────────────────────────────────────
-        const tech = articles
-            .filter(a => !shown.has(a.title) && !shown.has(a.url) && isTech(a))
-            .slice(0, 6);
-        tech.forEach(a => shown.add(a.title));
-        if (techContainer) techContainer.innerHTML = tech.length
-            ? tech.map(createNewsHTML).join('')
-            : '<p class="empty-note">No tech articles today.</p>';
-
-        // ── C. Finance column ─────────────────────────────────────────────────
+        // Finance — left column
         const finance = articles
             .filter(a => !shown.has(a.title) && !shown.has(a.url) && isFinance(a))
             .slice(0, 6);
         finance.forEach(a => shown.add(a.title));
         if (financeContainer) financeContainer.innerHTML = finance.length
             ? finance.map(createNewsHTML).join('')
-            : '<p class="empty-note">No finance articles today.</p>';
+            : '<p class="empty-note">No finance today.</p>';
 
-        // ── D. General / Global column (catch-all remaining) ───────────────────
+        // Tech — center column
+        const tech = articles
+            .filter(a => !shown.has(a.title) && !shown.has(a.url) && isTech(a))
+            .slice(0, 6);
+        tech.forEach(a => shown.add(a.title));
+        if (techContainer) techContainer.innerHTML = tech.length
+            ? tech.map(createNewsHTML).join('')
+            : '<p class="empty-note">No tech today.</p>';
+
+        // General / Global — right column (catch-all)
         const general = articles
             .filter(a => !shown.has(a.title) && !shown.has(a.url))
             .slice(0, 6);
         if (generalContainer) generalContainer.innerHTML = general.length
             ? general.map(createNewsHTML).join('')
-            : '<p class="empty-note">No general news today.</p>';
+            : '<p class="empty-note">No global news today.</p>';
     }
 
     fetchNews();

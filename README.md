@@ -36,7 +36,8 @@ The project is divided into an automated backend processing pipeline and a clean
 
 ### 2. Frontend Interface (`index.html` / `script.js`)
 * **NYT-Style Layout**: A three-column grid organizing news into *Tech Intelligence*, *Global Dispatch*, and *Finance & Markets*.
-* **Dynamic Filtering**: The JavaScript frontend dynamically categorizes articles from `news.json` using keyword-based domain relevance.
+* **Smart Category Detection**: Articles are classified by keyword analysis of title + summary content (not just the `category` field), ensuring more accurate placement across Tech, Finance, and General columns.
+* **Clean Summary Rendering**: All LLM-generated markdown is stripped server-side before display — no `## headers`, `**bold**`, or `[link](url)` syntax appears. Full summaries render inline without character clipping.
 * **Live Intelligence Tools**: Includes a real-time world clock with UTC offset selection for global analysts.
 
 ## 🛠️ Technical Stack
@@ -140,6 +141,7 @@ The repository runs daily at **08:13 HKT** via GitHub Actions. It commits the up
 | Story cache | `STORY_CACHE_DAYS` | `7` | Skip stories seen within this window |
 | Retry attempts | `MAX_RETRIES` | `3` | Per-article LLM call retries |
 | Base backoff | `BASE_BACKOFF` | `2s` | Initial backoff interval (doubles each retry) |
+| Near-duplicate threshold | `DEDUP_THRESHOLD` | `0.7` | Jaccard similarity above which stories are collapsed |
 
 ***
 

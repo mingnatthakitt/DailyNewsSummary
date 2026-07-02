@@ -29,8 +29,8 @@ The project is divided into an automated backend processing pipeline and a clean
 * **Source Aggregation**: Uses `feedparser` to ingest news from 20+ high-authority sources across three domains: AI & Tech, Finance, and General World News.
 * **Deduplication**: Near-duplicate stories (Jaccard similarity > 0.7 on normalized titles) are collapsed before stage 1, keeping the first-seen item.
 * **Seen-Story Cache**: Stories dispatched in the last 7 days (URL-based) are automatically skipped. Configurable via `STORY_CACHE_DAYS`. Persisted to `story_cache.json`.
-* **Stage 1: Weighted Selection** (60/25/15): The LLM evaluates stories with explicit weighting — AI & Tech at ~60%, Finance ~25%, Global ~15%. A hard minimum ensures Global News is never skipped. Output capped at 20 items max.
-* **Stage 2: Per-Article Summarization with Retry**: Each selected item is summarized individually (100–150 words) with exponential backoff (3 attempts: 2s → 4s → 8s). A failed item falls back to a truncated raw description rather than dropping the whole digest.
+* **Stage 1: Weighted Selection** (60/25/15): Nemotron evaluates stories with explicit weighting — AI & Tech at ~60%, Finance ~25%, Global ~15%. A hard minimum ensures Global News is never skipped. Output capped at 20 items max.
+* **Stage 2: Per-Article Summarization with Retry**: Uses `MODEL` env (default: Gemma 4 31b — superior rule-following for clean `## ` headers). Falls back to Nemotron on failure. 3 attempts with exponential backoff (2s → 4s → 8s). Final fallback: raw description.
 * **LLM Self-Categorization**: The LLM assigns each article to one of **9 canonical categories**: `ARTIFICIAL INTELLIGENCE`, `RESEARCH & ACADEMIC BREAKTHROUGHS`, `PRODUCT LAUNCHES & COMPANY NEWS`, `TECHNOLOGY`, `OPEN SOURCE & COMMUNITY`, `FUNDING & MARKET DYNAMICS`, `POLICY & REGULATION`, `FINANCE`, `GLOBAL NEWS`. The `## ` category header is parsed and stripped from the summary; only the clean summary text is saved to `news.json`.
 * **Garbage Output Rejection**: LLM summaries are validated against 13 placeholder/garbage patterns. Output shorter than 50 chars or matching any pattern triggers an automatic retry.
 * **Hybrid Dispatch**: Simultaneously broadcasts to a single-channel **Webhook** and a multi-server **Discord Bot**. Discord embeds show the canonical category name in the footer (e.g., `"Category: FUNDING & MARKET DYNAMICS"`).
@@ -74,16 +74,18 @@ The **`MODEL` env var is the primary way to select model and provider.** The mod
 | Not set | **Hardcoded fallback chain**: tries `NVIDIA_API_KEY` → `GEMINI_API_KEY` | — | — |
 
 **Resolution priority for `MODEL`:**
-1. `MODEL` env var (highest)
+1. `MODEL` env var (highest) — controls Stage 2 summarization model
 2. `llm.model` in `config.yaml`
-3. Hardcoded default (`nvidia/nemotron-3-ultra-550b-a55b`)
+3. Hardcoded default (`gemma-4-31b-it`)
+
+> **Stage 1 (selection)** always uses Nemotron (hardcoded). **Stage 2 (summarization)** uses `MODEL` env. This split leverages Nemotron's strong selection judgment and Gemma's superior rule-following for clean `## ` header output.
 
 **Examples:**
 ```bash
-MODEL=nvidia/nemotron-3-ultra-550b-a55b        # NVIDIA endpoint, uses NVIDIA_API_KEY
-MODEL=gemma-4-31b-it                           # AI Studio endpoint, uses GEMINI_API_KEY
+MODEL=gemma-4-31b-it                           # Gemma at AI Studio (default — best rule-following)
+MODEL=nvidia/nemotron-3-ultra-550b-a55b        # Nemotron at NVIDIA NIM
 MODEL=llama-3.1-70b PROVIDER_BASE_URL=https://ollama/v1 PROVIDER_API_KEY=xxx  # Custom endpoint
-# (no MODEL set) → falls back to NVIDIA + Nemotron if NVIDIA_API_KEY is present
+# (no MODEL set) → defaults to gemma-4-31b-it for summarization
 ```
 
 **Other env vars:**
@@ -137,7 +139,7 @@ The repository runs daily at **08:13 HKT** via GitHub Actions. It commits the up
 
 | Feature | Env Var | Default | Description |
 |---|---|---|---|
-| Model | `MODEL` | hardcoded fallback | Model name drives provider detection (see above) |
+| Summarization model | `MODEL` | `gemma-4-31b-it` | Stage 2 summarization (Stage 1 always Nemotron) |
 | Custom endpoint | `PROVIDER_BASE_URL` | — | Required when using a non-NVIDIA/non-Gemini model |
 | Dry-run mode | `DRY_RUN` | off | Skip Discord dispatch, write `news.json` only |
 | Story cache | `STORY_CACHE_DAYS` | `7` | Skip stories seen within this window |

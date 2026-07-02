@@ -106,6 +106,10 @@ MAX_RETRIES = 3
 BASE_BACKOFF = 2  # seconds
 DRY_RUN = os.getenv("DRY_RUN", "").lower() in ("1", "true", "yes")
 
+# Summarization model — selected by MODEL env, falls back to Gemma (better at rule-following)
+# Stage 1 always uses Nemotron; Stage 2 uses SUMMARIZE_MODEL
+SUMMARIZE_MODEL = os.getenv("MODEL", "gemma-4-31b-it")
+
 STORY_CACHE_DAYS = int(os.getenv("STORY_CACHE_DAYS", "7"))  # don't resend stories seen within this window
 STORY_CACHE_FILE = "story_cache.json"
 
@@ -360,11 +364,26 @@ def _strip_title_from_description(title, description):
 
 
 def _strip_category_header(content):
-    """Remove the leading ## category header line from LLM output, if present."""
+    """Remove all ## category header lines and <thought> blocks from LLM output."""
     lines = content.split("\n")
-    if lines and lines[0].strip().startswith("## "):
-        return "\n".join(lines[1:]).lstrip("\n")
-    return content
+    in_thought = False
+    kept = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("<thought>") or stripped.startswith("<thought "):
+            in_thought = True
+            continue
+        if in_thought:
+            if stripped.endswith("</thought>") or stripped.startswith("## "):
+                in_thought = False
+            continue
+        if not stripped.startswith("## "):
+            kept.append(line)
+        # skip ## CATEGORY NAME lines (but keep content after them)
+    result = "\n".join(kept).strip()
+    # Also strip any lingering category word lines that survived (ARTIFICIAL INTELLIGENCE, FUNDING & MARKET DYNAMICS etc. as standalone lines)
+    result = re.sub(r"^\s*(?:ARTIFICIAL INTELLIGENCE|RESEARCH & ACADEMIC BREAKTHROUGHS|PRODUCT LAUNCHES & COMPANY NEWS|TECHNOLOGY|OPEN SOURCE & COMMUNITY|FUNDING & MARKET DYNAMICS|POLICY & REGULATION|FINANCE|GLOBAL NEWS)\s*$", "", result, flags=re.MULTILINE).strip()
+    return result
 
 
 def summarize_single_item(item, category_hint):
@@ -384,7 +403,7 @@ def summarize_single_item(item, category_hint):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = client.chat.completions.create(
-                model=MODEL,
+                model=SUMMARIZE_MODEL,
                 messages=[
                     {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: ARTIFICIAL INTELLIGENCE | RESEARCH & ACADEMIC BREAKTHROUGHS | PRODUCT LAUNCHES & COMPANY NEWS | TECHNOLOGY | OPEN SOURCE & COMMUNITY | FUNDING & MARKET DYNAMICS | POLICY & REGULATION | FINANCE | GLOBAL NEWS. Example: \"## PRODUCT LAUNCHES & COMPANY NEWS\\n<title>\\n<summary>\\n<url>\" — the ## line MUST come first. Do NOT skip the ## header. After the summary, write only the URL on its own line."},
                     {"role": "user", "content": prompt}
@@ -412,7 +431,8 @@ def summarize_single_item(item, category_hint):
                 "title": item['title'],
                 "summary": clean_summary,
                 "category": final_cat,
-                "url": item['url']
+                "url": item['url'],
+                "source": item.get('source', '')
             }
         except Exception as e:
             logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} failed for '{item['title'][:60]}': {e}")
@@ -421,17 +441,17 @@ def summarize_single_item(item, category_hint):
                 logger.info(f"  Retrying in {backoff}s...")
                 time.sleep(backoff)
 
-    # Primary model exhausted — try Gemma as fallback (2 attempts, no extra backoff between models)
-    if GEMINI_API_KEY:
-        logger.info(f"  Primary model failed — trying Gemma for: {item['title'][:60]}...")
-        gemma_client = OpenAI(
-            api_key=GEMINI_API_KEY,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    # Primary model exhausted — try Nemotron as fallback (2 attempts, no extra backoff between models)
+    if NVIDIA_API_KEY:
+        logger.info(f"  Primary model failed — trying Nemotron for: {item['title'][:60]}...")
+        nemo_client = OpenAI(
+            api_key=NVIDIA_API_KEY,
+            base_url="https://integrate.api.nvidia.com/v1"
         )
-        for g_attempt in range(1, 3):
+        for n_attempt in range(1, 3):
             try:
-                response = gemma_client.chat.completions.create(
-                    model="gemma-4-31b-it",
+                response = nemo_client.chat.completions.create(
+                    model="nvidia/nemotron-3-ultra-550b-a55b",
                     messages=[
                         {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: ARTIFICIAL INTELLIGENCE | RESEARCH & ACADEMIC BREAKTHROUGHS | PRODUCT LAUNCHES & COMPANY NEWS | TECHNOLOGY | OPEN SOURCE & COMMUNITY | FUNDING & MARKET DYNAMICS | POLICY & REGULATION | FINANCE | GLOBAL NEWS. Example: \"## PRODUCT LAUNCHES & COMPANY NEWS\\n<title>\\n<summary>\\n<url>\" — the ## line MUST come first. Do NOT skip the ## header. After the summary, write only the URL on its own line."},
                         {"role": "user", "content": prompt}
@@ -441,22 +461,23 @@ def summarize_single_item(item, category_hint):
                 )
                 content = response.choices[0].message.content.strip()
                 if not _is_valid_summary(content):
-                    logger.warning(f"  Gemma attempt {g_attempt}/2 invalid — retrying...")
+                    logger.warning(f"  Nemotron attempt {n_attempt}/2 invalid — retrying...")
                     continue
 
                 parsed_cat = _parse_article_category(content)
                 final_cat = parsed_cat if parsed_cat else category_hint
                 clean_summary = _strip_category_header(content)
 
-                logger.info(f"  Gemma fallback succeeded for: {item['title'][:60]}")
+                logger.info(f"  Nemotron fallback succeeded for: {item['title'][:60]}")
                 return True, {
                     "title": item['title'],
                     "summary": clean_summary,
                     "category": final_cat,
-                    "url": item['url']
+                    "url": item['url'],
+                    "source": item.get('source', '')
                 }
             except Exception as e:
-                logger.warning(f"  Gemma attempt {g_attempt}/2 failed: {e}")
+                logger.warning(f"  Nemotron attempt {n_attempt}/2 failed: {e}")
 
     # Final fallback: use raw description — clean, no user-visible error markers
     logger.error(f"  All {MAX_RETRIES} attempts failed or returned garbage for '{item['title'][:60]}'. Using fallback.")
@@ -465,7 +486,8 @@ def summarize_single_item(item, category_hint):
         "title": item['title'],
         "summary": fallback_summary,
         "category": category_hint,
-        "url": item['url']
+        "url": item['url'],
+        "source": item.get('source', '')
     }
 
 def stage2_summarization(selected_items):
@@ -586,9 +608,12 @@ def parse_digest_to_articles(digest_or_articles):
 def create_discord_embeds(articles):
     embeds = []
     for article in articles:
+        embed_url = article['url'] if article.get('url', '').startswith('http') else ''
+        source_name = article.get('source', 'Source')
         embed = {
             "title": article['title'],
-            "description": article['summary'] + f"\n[**Source**]({article['url']})" if article.get('url', '').startswith('http') else article['summary'],
+            "url": embed_url,  # makes title clickable in Discord
+            "description": article['summary'] + (f"\n[**{source_name}**]({embed_url})" if embed_url else ''),
             "color": 3447003,
             "footer": {"text": f"Category: {article['category']}"},
             "timestamp": datetime.utcnow().isoformat()

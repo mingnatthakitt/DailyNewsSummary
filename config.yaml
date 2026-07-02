@@ -49,15 +49,15 @@ news:
       Then write the source URL on the line immediately after the summary.
 
       ## CATEGORY HEADERS (use exactly as shown, including ##)
-      ## ARTIFICIAL INTELLIGENCE
-      ## RESEARCH & ACADEMIC BREAKTHROUGHS
-      ## PRODUCT LAUNCHES & COMPANY NEWS
-      ## TECHNOLOGY
-      ## OPEN SOURCE & COMMUNITY
-      ## FUNDING & MARKET DYNAMICS
-      ## POLICY & REGULATION
-      ## FINANCE
-      ## GLOBAL NEWS
+      ## Artificial Intelligence
+      ## Research & Academic breakthroughs
+      ## Product launches & Company News
+      ## Technology
+      ## Opensource & Community
+      ## Funding & Market Dynamics
+      ## Policy & Regulation
+      ## Finance
+      ## Global News
 
       ## FORMATTING RULES
       - Write the ## header, then immediately the first article's title on the next line — nothing else on that line.

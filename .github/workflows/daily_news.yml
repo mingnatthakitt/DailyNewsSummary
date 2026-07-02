@@ -41,3 +41,4 @@ jobs:
         with:
             commit_message: "Update daily news: ${{ github.event.head_commit.timestamp }}"
             file_pattern: 'news.json story_cache.json'
+            pull_strategy: 'rebase'

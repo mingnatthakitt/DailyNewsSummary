@@ -29,6 +29,7 @@ jobs:
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MODEL: ${{ secrets.MODEL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: python generate_news.py
@@ -37,4 +38,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
             commit_message: "Update daily news: ${{ github.event.head_commit.timestamp }}"
-            file_pattern: 'news.json'
+            file_pattern: 'news.json story_cache.json'

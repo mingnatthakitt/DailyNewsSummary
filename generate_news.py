@@ -11,17 +11,11 @@ import time
 import asyncio
 import discord
 
-# Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load Config
-try:
-    with open("config.yaml", "r") as f:
-        config = yaml.safe_load(f)
-except Exception as e:
-    logger.error(f"Failed to load config.yaml: {e}")
-    exit(1)
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -29,625 +23,477 @@ PROVIDER_API_KEY = os.getenv("PROVIDER_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-# ── Provider auto-detection ────────────────────────────────────────────────────
-# Model name (from MODEL env > config.yaml) drives everything:
-#   - "nvidia"/"nemotron" in model name  → NVIDIA endpoint + NVIDIA_API_KEY
-#   - "gemma"/"gemini" in model name    → AI Studio endpoint + GEMINI_API_KEY
-#   - unknown model                      → PROVIDER_API_KEY + PROVIDER_BASE_URL (both required)
-#   - MODEL env not set                  → try MODEL env, then config.yaml, then hardcoded defaults
-
+# ── Provider resolution ──────────────────────────────────────────────────────────
 HARDCODED_DEFAULTS = [
-    ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemma-4-31b-it", GEMINI_API_KEY),
-    ("nvidia", "https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-ultra-550b-a55b", NVIDIA_API_KEY),
+    ("gemini",  "https://generativelanguage.googleapis.com/v1beta/openai/", "gemma-4-31b-it", GEMINI_API_KEY),
+    ("nvidia",  "https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-ultra-550b-a55b", NVIDIA_API_KEY),
 ]
 
-PROVIDER_MODEL_PATTERNS = {
-    "nvidia": lambda m: "nvidia" in m.lower() or "nemotron" in m.lower(),
-    "gemini":  lambda m: "gemma" in m.lower() or "gemini" in m.lower(),
+ENDPOINTS = {
+    "nvidia": "https://integrate.api.nvidia.com/v1",
+    "gemini":  "https://generativelanguage.googleapis.com/v1beta/openai/",
 }
 
-def _detect_from_model(model_name):
-    """Return (provider, base_url, api_key) for a given model name, or None."""
-    for provider, matcher in PROVIDER_MODEL_PATTERNS.items():
-        if matcher(model_name):
-            key = {"nvidia": NVIDIA_API_KEY, "gemini": GEMINI_API_KEY}.get(provider)
-            base = {"nvidia": "https://integrate.api.nvidia.com/v1",
-                    "gemini":  "https://generativelanguage.googleapis.com/v1beta/openai/"}.get(provider)
+def _detect(model_name):
+    for provider in ("nvidia", "gemini"):
+        if provider in model_name.lower():
+            key = NVIDIA_API_KEY if provider == "nvidia" else GEMINI_API_KEY
             if key:
-                return provider, base, key
-    return None  # unknown provider — must use PROVIDER_* vars
+                return provider, ENDPOINTS[provider], key
+    return None
 
-# Step 1: Resolve MODEL — env > config > hardcoded default
 _model_env = os.getenv("MODEL")
-_yaml_model = config.get('llm', {}).get('model')
+_yaml_model = config.get("llm", {}).get("model")
 MODEL = _model_env or _yaml_model
 
-# Step 2: Determine provider based on resolved model name
-_active_provider = None
-BASE_URL = None
-API_KEY = None
-
+_active_provider, BASE_URL, API_KEY = None, None, None
 if MODEL:
-    detected = _detect_from_model(MODEL)
+    detected = _detect(MODEL)
     if detected:
         _active_provider, BASE_URL, API_KEY = detected
 
-if _active_provider is None:
-    # Unknown model or MODEL not set — require PROVIDER_* vars
-    _pb = os.getenv("PROVIDER_BASE_URL")
-    _pk = PROVIDER_API_KEY
-    if _pb and _pk:
-        _active_provider = "provider"
-        BASE_URL = _pb
-        API_KEY = _pk
-        logger.info(f"Using custom provider: MODEL='{MODEL}', BASE_URL from PROVIDER_BASE_URL")
+if not _active_provider:
+    if os.getenv("PROVIDER_BASE_URL") and PROVIDER_API_KEY:
+        _active_provider, BASE_URL, API_KEY = "provider", os.getenv("PROVIDER_BASE_URL"), PROVIDER_API_KEY
     else:
-        # Step 3: Fall back through hardcoded (AIStudio+Gemma → NVIDIA+Nemotron)
         for prov, base, model_d, key in HARDCODED_DEFAULTS:
             if key:
-                _active_provider = prov
-                BASE_URL = base
-                MODEL = model_d
-                API_KEY = key
-                logger.info(f"No MODEL env/config — using hardcoded default: {prov.upper()} + {model_d}")
+                _active_provider, BASE_URL, MODEL, API_KEY = prov, base, model_d, key
                 break
 
-if _active_provider is None or not API_KEY or not BASE_URL:
-    logger.error("Could not resolve provider. Set MODEL env (with nvidia/gemma in name), or PROVIDER_API_KEY + PROVIDER_BASE_URL.")
+if not _active_provider or not API_KEY or not BASE_URL:
+    logger.error("Set MODEL env (with nvidia/gemma in name) or PROVIDER_API_KEY + PROVIDER_BASE_URL.")
     exit(1)
 
-# Step 3: Log what we settled on
-logger.info(f"Provider: {_active_provider.upper()}")
-logger.info(f"Using base_url: {BASE_URL}")
-logger.info(f"Using model: {MODEL}")
-logger.info(f"API key source: {_active_provider.upper()}_API_KEY")
+logger.info(f"Provider: {_active_provider.upper()} | Model: {MODEL} | Base: {BASE_URL}")
 
 MAX_RETRIES = 3
-BASE_BACKOFF = 2  # seconds
+BASE_BACKOFF = 2
 DRY_RUN = os.getenv("DRY_RUN", "").lower() in ("1", "true", "yes")
-
-# Summarization model — selected by MODEL env, falls back to Gemma (better at rule-following)
-# Stage 1 always uses Nemotron; Stage 2 uses SUMMARIZE_MODEL
-SUMMARIZE_MODEL = os.getenv("MODEL", "gemma-4-31b-it")
-
-STORY_CACHE_DAYS = int(os.getenv("STORY_CACHE_DAYS", "7"))  # don't resend stories seen within this window
+SUMMARIZE_MODEL = MODEL
+STORY_CACHE_DAYS = int(os.getenv("STORY_CACHE_DAYS", "7"))
 STORY_CACHE_FILE = "story_cache.json"
 
-# ── Seen-story cache ────────────────────────────────────────────────────────────
-
+# ── Story cache ─────────────────────────────────────────────────────────────────
 def _cache_age(date_str):
-    """Return approximate age of a cache entry in days."""
     try:
-        cached = datetime.fromisoformat(date_str)
-        return (datetime.now() - cached).days
+        return (datetime.now() - datetime.fromisoformat(date_str)).days
     except Exception:
         return 999
 
 def load_story_cache():
-    """Load the story URL→date cache. Returns dict of {url: iso_date_str}."""
     if not os.path.exists(STORY_CACHE_FILE):
         return {}
     try:
-        with open(STORY_CACHE_FILE, "r") as f:
+        with open(STORY_CACHE_FILE) as f:
             raw = json.load(f)
-        # Prune entries older than STORY_CACHE_DAYS while loading
-        cutoff = datetime.now().timestamp() - (STORY_CACHE_DAYS * 86400)
-        pruned = {
-            url: ts for url, ts in raw.items()
-            if datetime.fromisoformat(ts.replace("Z","+00:00")).timestamp() > cutoff
-               if STORY_CACHE_DAYS > 0
-        }
-        return pruned
+        if STORY_CACHE_DAYS > 0:
+            cutoff = datetime.now().timestamp() - STORY_CACHE_DAYS * 86400
+            raw = {u: ts for u, ts in raw.items()
+                   if datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() > cutoff}
+        return raw
     except Exception as e:
         logger.warning(f"Could not load story cache: {e}")
         return {}
 
 def save_story_cache(cache):
-    """Save the story cache, pruning entries older than STORY_CACHE_DAYS."""
     try:
         with open(STORY_CACHE_FILE, "w") as f:
             json.dump(cache, f, indent=2)
     except Exception as e:
         logger.error(f"Could not save story cache: {e}")
 
-def filter_seen_stories(items, seen_cache):
-    """Drop items whose URL is in the seen_cache within STORY_CACHE_DAYS."""
-    skipped = 0
-    kept = []
-    for item in items:
-        url = item.get('url') or ""
-        if url and url in seen_cache:
-            age = _cache_age(seen_cache[url])
-            if age <= STORY_CACHE_DAYS:
-                skipped += 1
-                logger.debug(f"Skipped (seen {age}d ago): {item['title'][:60]}")
-                continue
-        kept.append(item)
-    if skipped:
-        logger.info(f"Story cache: skipped {skipped} already-seen stories (≤{STORY_CACHE_DAYS}d old).")
-    return kept
-client = OpenAI(
-    base_url=BASE_URL,
-    api_key=API_KEY
-)
+# ── Deduplication ───────────────────────────────────────────────────────────────
+STOPWORDS = {'the','a','an','and','or','but','in','on','at','to','for','of','with','by','is','are','was','were','be','been','being','has','have','had','do','does','did'}
 
-def normalize_title(title):
-    """Return a set of significant word tokens from a title for similarity comparison."""
-    t = title.lower()
-    t = re.sub(r'^(breaking|update|just in|exclusive|announcing):\s*', '', t)
+def _norm(title):
+    t = re.sub(r'^(breaking|update|just in|exclusive|announcing):\s*', '', title.lower())
     t = re.sub(r'[^\w\s]', ' ', t)
-    stopwords = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'has', 'have', 'had', 'do', 'does', 'did'}
-    tokens = {w for w in t.split() if w not in stopwords and len(w) > 2}
-    return tokens
+    return {w for w in t.split() if w not in STOPWORDS and len(w) > 2}
 
-def jaccard_similarity(set_a, set_b):
-    """Jaccard similarity between two sets: |A∩B| / |A∪B|."""
-    if not set_a or not set_b:
+def _jaccard(a, b):
+    if not a or not b:
         return 0.0
-    return len(set_a & set_b) / max(len(set_a | set_b), 1)
+    return len(a & b) / max(len(a | b), 1)
 
 def deduplicate_items(items, threshold=0.7):
-    """Drop near-duplicate items (by title similarity > threshold), keeping the first-seen."""
-    unique = []
-    dropped = 0
+    unique, dropped = [], 0
     for item in items:
-        item_norm = normalize_title(item['title'])
-        is_dup = any(
-            jaccard_similarity(item_norm, normalize_title(u['title'])) > threshold
-            for u in unique
-        )
-        if is_dup:
+        n = _norm(item["title"])
+        if any(_jaccard(n, _norm(u["title"])) > threshold for u in unique):
             dropped += 1
-            logger.debug(f"Dropped duplicate: {item['title']}")
         else:
             unique.append(item)
     if dropped:
-        logger.info(f"Deduplicated {dropped} items → kept {len(unique)} unique stories.")
+        logger.info(f"Deduplicated {dropped} → kept {len(unique)} unique stories.")
     return unique
+
+# ── News fetch ─────────────────────────────────────────────────────────────────
+client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
+# Stage 1 always uses Nemotron on NVIDIA endpoint — create a dedicated client if needed
+if NVIDIA_API_KEY and BASE_URL != "https://integrate.api.nvidia.com/v1":
+    nvidia_client = OpenAI(api_key=NVIDIA_API_KEY, base_url="https://integrate.api.nvidia.com/v1")
+else:
+    nvidia_client = client
 
 def fetch_all_news():
     all_items = []
     item_id = 0
-    for group, sources in config['feeds'].items():
+    for group, sources in config["feeds"].items():
         logger.info(f"Fetching {group}...")
         for name, url in sources.items():
             try:
                 feed = feedparser.parse(url)
                 if not feed.entries:
-                    logger.warning(f"No entries found for {name}")
                     continue
-                
-                count = 0
-                for entry in feed.entries:
-                    if count >= config['news']['max_items_per_source']:
-                        break
-                    
+                for entry in feed.entries[:config["news"]["max_items_per_source"]]:
                     item_id += 1
                     all_items.append({
                         "id": f"ID-{item_id}",
                         "source": name,
                         "title": entry.title,
-                        "description": entry.summary if hasattr(entry, 'summary') else entry.title,
+                        "description": entry.summary if hasattr(entry, "summary") else entry.title,
                         "url": entry.link,
-                        "group": group
+                        "group": group,
                     })
-                    count += 1
             except Exception as e:
                 logger.error(f"Error fetching {name}: {e}")
 
-    logger.info(f"Fetched {len(all_items)} raw items from all sources.")
+    logger.info(f"Fetched {len(all_items)} raw items.")
     all_items = deduplicate_items(all_items)
-    seen_cache = load_story_cache()
-    all_items = filter_seen_stories(all_items, seen_cache)
-    logger.info(f"After seen-story filter: {len(all_items)} fresh items.")
+    all_items = [i for i in all_items if not (i["url"] in load_story_cache() and _cache_age(load_story_cache()[i["url"]]) <= STORY_CACHE_DAYS)]
+    logger.info(f"After cache filter: {len(all_items)} fresh items.")
     return all_items
 
+# ── Stage 1: selection ──────────────────────────────────────────────────────────
 def stage1_selection(news_items):
-    logger.info(f"Stage 1: Selecting top items from {len(news_items)} stories...")
-    
-    formatted_news = "\n".join([f"[{item['id']}] Category: {item['group']} | {item['title']} - {item['source']}" for item in news_items])
-    
-    prompt = config['news']['stage1_prompt_template'].format(
-        formatted_news=formatted_news,
-        total_items=len(news_items)
+    logger.info(f"Stage 1: selecting from {len(news_items)} stories...")
+    formatted = "\n".join(
+        f"[{i['id']}] Category: {i['group']} | {i['title']} - {i['source']}"
+        for i in news_items
     )
-    
+    prompt = config["news"]["stage1_prompt_template"].format(
+        formatted_news=formatted,
+        total_items=len(news_items),
+    )
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
+        resp = nvidia_client.chat.completions.create(
+            model="nvidia/nemotron-3-ultra-550b-a55b",
             messages=[
-                {"role": "system", "content": "You are a professional news editor. Output ONLY a JSON array of IDs like ['ID-1', 'ID-2']."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "Output ONLY a JSON array of IDs like ['ID-1', 'ID-2']."},
+                {"role": "user", "content": prompt},
             ],
-            temperature=0.2
+            temperature=0.2,
         )
-        content = response.choices[0].message.content.strip()
-        logger.info(f"Stage 1 Raw Output: {content[:70]}...")
-        
-        # Super robust ID extraction
-        selected_ids = re.findall(r'ID-\d+', content)
-        
-        if not selected_ids:
-            logger.warning("No IDs found in LLM output. Using fallback.")
+        content = resp.choices[0].message.content.strip()
+        logger.info(f"Stage 1 Raw: {content[:70]}...")
+        ids = re.findall(r"ID-\d+", content)
+        if not ids:
+            logger.warning("No IDs found — using fallback.")
             return news_items[:15]
-            
-        selected_items = [item for item in news_items if item['id'] in selected_ids]
-
-        # Hard cap: never summarize more than 20 items regardless of LLM output
-        if len(selected_items) > 20:
-            logger.warning(f"LLM returned {len(selected_items)} IDs — capping to 20.")
-            selected_items = selected_items[:20]
-
-        logger.info(f"Selected {len(selected_items)} items.")
-        return selected_items
+        selected = [i for i in news_items if i["id"] in ids][:20]
+        if len(ids) > 20:
+            logger.warning(f"LLM returned {len(ids)} IDs — capped to 20.")
+        logger.info(f"Selected {len(selected)} items.")
+        return selected
     except Exception as e:
-        logger.error(f"Stage 1 Error: {e}")
+        logger.error(f"Stage 1 error: {e}")
         return news_items[:15]
 
-# Patterns that indicate LLM returned placeholder/invalid output instead of a real summary
+# ── Validation patterns ─────────────────────────────────────────────────────────
 GARBAGE_PATTERNS = [
-    re.compile(r'\*No relevant items', re.IGNORECASE),
-    re.compile(r'^#+\s*artificial intelligence\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*finance\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*global news\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*research\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*product launches?\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*technology\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*policy\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*open source\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'^#+\s*funding\s*$', re.IGNORECASE | re.MULTILINE),
-    re.compile(r'all\s+\d+\s+items?\s+are\s+excluded', re.IGNORECASE),
-    re.compile(r'no stories?(?:were)?\s*identified', re.IGNORECASE),
-    re.compile(r'the\s+digest\s+contains\s+no\s+items?', re.IGNORECASE),
+    re.compile(r"\*No relevant items", re.I),
+    re.compile(r"^#+\s*artificial intelligence\s*$", re.I | re.M),
+    re.compile(r"^#+\s*finance\s*$", re.I | re.M),
+    re.compile(r"^#+\s*global news\s*$", re.I | re.M),
+    re.compile(r"^#+\s*research\s*$", re.I | re.M),
+    re.compile(r"^#+\s*product launches?\s*$", re.I | re.M),
+    re.compile(r"^#+\s*technology\s*$", re.I | re.M),
+    re.compile(r"^#+\s*policy\s*$", re.I | re.M),
+    re.compile(r"^#+\s*open source\s*$", re.I | re.M),
+    re.compile(r"^#+\s*funding\s*$", re.I | re.M),
+    re.compile(r"all\s+\d+\s+items?\s+are\s+excluded", re.I),
+    re.compile(r"no stories?(?:were)?\s*identified", re.I),
+    re.compile(r"the\s+digest\s+contains\s+no\s+items?", re.I),
 ]
 
-# Canonical category name → normalized key (for matching LLM output headers)
-# Canonical category names — only aliases need mapping; canonical forms are stored as-is.
-CANONICAL_CATEGORIES = {
-    # Aliases → canonical
-    "PRODUCT LAUNCHES, UPDATES & COMPANY NEWS": "PRODUCT LAUNCHES & COMPANY NEWS",
-    "PRODUCT LAUNCHES AND COMPANY NEWS":         "PRODUCT LAUNCHES & COMPANY NEWS",
-    # Canonical forms — stored directly (identity)
-    "ARTIFICIAL INTELLIGENCE":         None,
-    "RESEARCH & ACADEMIC BREAKTHROUGHS": None,
-    "PRODUCT LAUNCHES & COMPANY NEWS":  None,
-    "TECHNOLOGY":                      None,
-    "OPEN SOURCE & COMMUNITY":          None,
-    "FUNDING & MARKET DYNAMICS":       None,
-    "POLICY & REGULATION":              None,
-    "FINANCE":                          None,
-    "GLOBAL NEWS":                      None,
+# ── Category canonicalization ──────────────────────────────────────────────────
+CANONICAL_KEYS = frozenset({
+    "Artificial Intelligence",
+    "Research & Academic Breakthroughs",
+    "Product Launches & Company News",
+    "Technology",
+    "Open Source & Community",
+    "Funding & Market Dynamics",
+    "Policy & Regulation",
+    "Finance",
+    "Global News",
+})
+
+CATEGORY_ALIASES = {
+    # Title-case canonical (display format in Discord)
+    "Product Launches, Updates & Company News": "Product Launches & Company News",
+    "Product Launches and Company News":          "Product Launches & Company News",
+    # ALL CAPS variants
+    "PRODUCT LAUNCHES, UPDATES & COMPANY NEWS": "Product Launches & Company News",
+    "PRODUCT LAUNCHES AND COMPANY NEWS":          "Product Launches & Company News",
+    "PRODUCT LAUNCHES & COMPANY NEWS":           "Product Launches & Company News",
+    "ARTIFICIAL INTELLIGENCE":                  "Artificial Intelligence",
+    "RESEARCH & ACADEMIC BREAKTHROUGHS":         "Research & Academic Breakthroughs",
+    "OPEN SOURCE & COMMUNITY":                   "Open Source & Community",
+    "FUNDING & MARKET DYNAMICS":                "Funding & Market Dynamics",
+    "POLICY & REGULATION":                       "Policy & Regulation",
+    "FINANCE":                                   "Finance",
+    "GLOBAL NEWS":                               "Global News",
+    # lowercase variants
+    "product launches, updates & company news":  "Product Launches & Company News",
+    "product launches and company news":          "Product Launches & Company News",
+    "artificial intelligence":                   "Artificial Intelligence",
+    "research & academic breakthroughs":          "Research & Academic Breakthroughs",
+    "open source & community":                   "Open Source & Community",
+    "funding & market dynamics":                 "Funding & Market Dynamics",
+    "policy & regulation":                        "Policy & Regulation",
+    "finance":                                    "Finance",
+    "global news":                               "Global News",
+    # common misspellings / alternate forms
+    "Opensource & Community":                    "Open Source & Community",
+    "opensource & community":                    "Open Source & Community",
+    "Research & Academic breakthroughs":           "Research & Academic Breakthroughs",
+    "research & academic breakthroughs":           "Research & Academic Breakthroughs",
 }
 
-def _parse_article_category(llm_output):
-    """Extract the canonical category from LLM output. Returns canonical name or None."""
-    lines = llm_output.split("\n")
-    for line in lines:
+_STRIP_CATEGORY_RE = re.compile(
+    r"^\s*(?:"
+    + "|".join(re.escape(k.lower()) for k in CANONICAL_KEYS)
+    + r")\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+def _parse_article_category(text):
+    """Return canonical category name from LLM output, or None."""
+    for line in text.split("\n"):
         stripped = line.strip()
-        if stripped.startswith("## "):
-            candidate = stripped[3:].strip()
-            if candidate in CANONICAL_CATEGORIES:
-                mapped = CANONICAL_CATEGORIES[candidate]
-                # Identity entry → value is None; return candidate directly
-                # Alias entry → value is the canonical name string
-                return mapped if mapped is not None else candidate
-            # Fuzzy match: uppercase, collapse whitespace (handles "  PRODUCT LAUNCHES  &  COMPANY NEWS")
-            key = " ".join(candidate.upper().split())
-            for known in CANONICAL_CATEGORIES:
-                if " ".join(known.upper().split()) == key:
-                    mapped = CANONICAL_CATEGORIES[known]
-                    return mapped if mapped is not None else known
+        # Also handle ## Category appearing on the same line as </thought>
+        for part in stripped.split("</thought>"):
+            part = part.strip()
+            if part.startswith("## "):
+                candidate = part[3:].strip()
+                if candidate in CANONICAL_KEYS:
+                    return candidate
+                if candidate in CATEGORY_ALIASES:
+                    return CATEGORY_ALIASES[candidate]
+                collapsed = " ".join(candidate.split())
+                if collapsed in CATEGORY_ALIASES:
+                    return CATEGORY_ALIASES[collapsed]
+                if collapsed.upper() in CANONICAL_KEYS:
+                    return collapsed.upper()
+        if not stripped.startswith("## "):
+            continue
+        candidate = stripped[3:].strip()
+        if candidate in CANONICAL_KEYS:
+            return candidate
+        if candidate in CATEGORY_ALIASES:
+            return CATEGORY_ALIASES[candidate]
+        collapsed = " ".join(candidate.split())
+        if collapsed in CATEGORY_ALIASES:
+            return CATEGORY_ALIASES[collapsed]
+        if collapsed.upper() in CANONICAL_KEYS:
+            return collapsed.upper()
     return None
 
-def _is_valid_summary(text):
-    """Return True if text looks like a real summary, False if it's placeholder garbage."""
+def _is_valid(text):
     if not text or len(text.strip()) < 50:
         return False
-    for pattern in GARBAGE_PATTERNS:
-        if pattern.search(text):
+    for p in GARBAGE_PATTERNS:
+        if p.search(text):
             return False
     return True
 
-def _strip_title_from_description(title, description):
-    """Strip the title (and any prefix like 'Title: ' or '(Title: ...)') from RSS description."""
-    if not description or not title:
-        return description
-    # Escape special regex chars in title, use first 80 chars to avoid over-long patterns
-    escaped = re.escape(title[:80])
-    # Remove "Title: TitleText\n\n" or "Title: TitleText — ..." prefix
-    description = re.sub(r'^Title:\s*' + escaped + r'[\s\—\-:]+', '', description, flags=re.IGNORECASE)
-    # Remove "(Title: TitleText)" wrapper
-    description = re.sub(r'^\(' + escaped + r'\)[\s\-:]*', '', description, flags=re.IGNORECASE)
-    # Remove bare title at start (when RSS just puts title as plain text first line)
-    description = re.sub(r'^' + escaped + r'[\s\—\-:]*', '', description, flags=re.IGNORECASE)
-    return description
+def _strip_title(title, desc):
+    if not desc or not title:
+        return desc
+    esc = re.escape(title[:80])
+    desc = re.sub(r"^Title:\s*" + esc + r"[\s\—\-:]+", "", desc, flags=re.I)
+    desc = re.sub(r"^\(" + esc + r"\)[\s\-:]*", "", desc)
+    desc = re.sub(r"^" + esc + r"[\s\—\-:]*", "", desc, flags=re.I)
+    return desc
 
-
-def _strip_category_header(content):
-    """Remove all ## category header lines and <thought> blocks from LLM output."""
+def _strip(content):
+    """Remove <thought> blocks, ## category headers, and ### title lines."""
     lines = content.split("\n")
-    in_thought = False
-    kept = []
+    kept, in_thought = [], False
     for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("<thought>") or stripped.startswith("<thought "):
+        s = line.strip()
+        if s.startswith("<thought>") or s.startswith("<thought "):
             in_thought = True
             continue
         if in_thought:
-            if stripped.endswith("</thought>") or stripped.startswith("## "):
+            # Exit thought block — extract any content after </thought> on the same line
+            if "</thought>" in s:
+                rest = s[s.index("</thought>") + len("</thought>"):].strip()
                 in_thought = False
+                # Apply same skip rules to rest (## header or ### title → drop)
+                if rest and not rest.startswith("## ") and not rest.startswith("### "):
+                    kept.append(rest)
             continue
-        if not stripped.startswith("## "):
+        if not s.startswith("## ") and not s.startswith("### "):
             kept.append(line)
-        # skip ## CATEGORY NAME lines (but keep content after them)
-    result = "\n".join(kept).strip()
-    # Also strip any lingering category word lines that survived (ARTIFICIAL INTELLIGENCE, FUNDING & MARKET DYNAMICS etc. as standalone lines)
-    result = re.sub(r"^\s*(?:ARTIFICIAL INTELLIGENCE|RESEARCH & ACADEMIC BREAKTHROUGHS|PRODUCT LAUNCHES & COMPANY NEWS|TECHNOLOGY|OPEN SOURCE & COMMUNITY|FUNDING & MARKET DYNAMICS|POLICY & REGULATION|FINANCE|GLOBAL NEWS)\s*$", "", result, flags=re.MULTILINE).strip()
-    return result
+    return re.sub(_STRIP_CATEGORY_RE, "", "\n".join(kept)).strip()
 
+# ── System prompt (shared by primary and Nemotron fallback) ─────────────────────
+_SYSTEM_PROMPT = (
+    "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. "
+    "CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: "
+    "Artificial Intelligence | Research & Academic Breakthroughs | Product Launches & Company News | "
+    "Technology | Open Source & Community | Funding & Market Dynamics | Policy & Regulation | Finance | Global News. "
+    'Example: "## Product Launches & Company News\\n### Article Title\\n<summary>\\n[**Source Name**](https://...)\" — '
+    "the ## line MUST come first. Do NOT skip the ## header. Do NOT include <thought> or [Summary] blocks. "
+    "After the summary, write the source as a markdown link on its own line."
+)
 
+# ── Stage 2: per-article summarization with retry ──────────────────────────────
 def summarize_single_item(item, category_hint):
-    """Summarize a single news item with exponential-backoff retry. Returns (success, article_dict)."""
-    # Strip title from description before sending to LLM — RSS descriptions echo the title verbatim
-    clean_desc = _strip_title_from_description(item['title'], item['description'])
-    single_item_text = (
-        f"ID: {item['id']}\n"
-        f"Title: {item['title']}\n"
-        f"Source: {item['source']}\n"
-        f"URL: {item['url']}\n"
-        f"Content: {clean_desc}"
-    )
-    prompt = config['news']['stage2_prompt_template'].format(
-        selected_news=single_item_text
-    )
+    clean_desc = _strip_title(item["title"], item["description"])
+    item_text = f"ID: {item['id']}\nTitle: {item['title']}\nSource: {item['source']}\nURL: {item['url']}\nContent: {clean_desc}"
+    prompt = config["news"]["stage2_prompt_template"].format(selected_news=item_text, count=1)
+
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            response = client.chat.completions.create(
+            resp = client.chat.completions.create(
                 model=SUMMARIZE_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: ARTIFICIAL INTELLIGENCE | RESEARCH & ACADEMIC BREAKTHROUGHS | PRODUCT LAUNCHES & COMPANY NEWS | TECHNOLOGY | OPEN SOURCE & COMMUNITY | FUNDING & MARKET DYNAMICS | POLICY & REGULATION | FINANCE | GLOBAL NEWS. Example: \"## PRODUCT LAUNCHES & COMPANY NEWS\\n<title>\\n<summary>\\n<url>\" — the ## line MUST come first. Do NOT skip the ## header. After the summary, write only the URL on its own line."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=1024
+                max_tokens=2048,
             )
-            content = response.choices[0].message.content.strip()
-
-            # Validate: reject placeholder/garbage output
-            if not _is_valid_summary(content):
-                logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} returned invalid output for '{item['title'][:60]}' — retrying...")
+            content = resp.choices[0].message.content.strip()
+            if not _is_valid(content):
+                logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} invalid — retrying...")
                 if attempt < MAX_RETRIES:
-                    backoff = BASE_BACKOFF * (2 ** (attempt - 1))
-                    time.sleep(backoff)
+                    time.sleep(BASE_BACKOFF * (2 ** (attempt - 1)))
                 continue
-
-            # Extract the canonical category the LLM used
-            parsed_cat = _parse_article_category(content)
-            final_cat = parsed_cat if parsed_cat else category_hint
-            # Strip the ## header from the summary — category is saved separately
-            clean_summary = _strip_category_header(content)
-
+            cat = _parse_article_category(content) or category_hint
             return True, {
-                "title": item['title'],
-                "summary": clean_summary,
-                "category": final_cat,
-                "url": item['url'],
-                "source": item.get('source', '')
+                "title": item["title"],
+                "summary": _strip(content),
+                "category": cat,
+                "url": item["url"],
+                "source": item.get("source", ""),
             }
         except Exception as e:
-            logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} failed for '{item['title'][:60]}': {e}")
+            logger.warning(f"  Attempt {attempt}/{MAX_RETRIES} failed: {e}")
             if attempt < MAX_RETRIES:
-                backoff = BASE_BACKOFF * (2 ** (attempt - 1))
-                logger.info(f"  Retrying in {backoff}s...")
-                time.sleep(backoff)
+                time.sleep(BASE_BACKOFF * (2 ** (attempt - 1)))
 
-    # Primary model exhausted — try Nemotron as fallback (2 attempts, no extra backoff between models)
+    # Nemotron fallback
     if NVIDIA_API_KEY:
-        logger.info(f"  Primary model failed — trying Nemotron for: {item['title'][:60]}...")
-        nemo_client = OpenAI(
-            api_key=NVIDIA_API_KEY,
-            base_url="https://integrate.api.nvidia.com/v1"
-        )
-        for n_attempt in range(1, 3):
+        logger.info(f"  Primary failed — trying Nemotron...")
+        nemo = OpenAI(api_key=NVIDIA_API_KEY, base_url="https://integrate.api.nvidia.com/v1")
+        for na in range(1, 3):
             try:
-                response = nemo_client.chat.completions.create(
+                resp = nemo.chat.completions.create(
                     model="nvidia/nemotron-3-ultra-550b-a55b",
                     messages=[
-                        {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: ARTIFICIAL INTELLIGENCE | RESEARCH & ACADEMIC BREAKTHROUGHS | PRODUCT LAUNCHES & COMPANY NEWS | TECHNOLOGY | OPEN SOURCE & COMMUNITY | FUNDING & MARKET DYNAMICS | POLICY & REGULATION | FINANCE | GLOBAL NEWS. Example: \"## PRODUCT LAUNCHES & COMPANY NEWS\\n<title>\\n<summary>\\n<url>\" — the ## line MUST come first. Do NOT skip the ## header. After the summary, write only the URL on its own line."},
-                        {"role": "user", "content": prompt}
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
                     ],
                     temperature=0.3,
-                    max_tokens=1024
+                    max_tokens=2048,
                 )
-                content = response.choices[0].message.content.strip()
-                if not _is_valid_summary(content):
-                    logger.warning(f"  Nemotron attempt {n_attempt}/2 invalid — retrying...")
+                content = resp.choices[0].message.content.strip()
+                if not _is_valid(content):
+                    logger.warning(f"  Nemotron attempt {na}/2 invalid.")
                     continue
-
-                parsed_cat = _parse_article_category(content)
-                final_cat = parsed_cat if parsed_cat else category_hint
-                clean_summary = _strip_category_header(content)
-
-                logger.info(f"  Nemotron fallback succeeded for: {item['title'][:60]}")
+                cat = _parse_article_category(content) or category_hint
+                logger.info(f"  Nemotron fallback succeeded.")
                 return True, {
-                    "title": item['title'],
-                    "summary": clean_summary,
-                    "category": final_cat,
-                    "url": item['url'],
-                    "source": item.get('source', '')
+                    "title": item["title"],
+                    "summary": _strip(content),
+                    "category": cat,
+                    "url": item["url"],
+                    "source": item.get("source", ""),
                 }
             except Exception as e:
-                logger.warning(f"  Nemotron attempt {n_attempt}/2 failed: {e}")
+                logger.warning(f"  Nemotron attempt {na}/2 failed: {e}")
 
-    # Final fallback: use raw description — clean, no user-visible error markers
-    logger.error(f"  All {MAX_RETRIES} attempts failed or returned garbage for '{item['title'][:60]}'. Using fallback.")
-    fallback_summary = item['description'][:300].strip() if item['description'] else item['title']
+    logger.error(f"  All attempts failed for '{item['title'][:60]}'. Using raw description.")
+    raw = item["description"][:300].strip() if item["description"] else item["title"]
     return False, {
-        "title": item['title'],
-        "summary": fallback_summary,
+        "title": item["title"],
+        "summary": raw,
         "category": category_hint,
-        "url": item['url'],
-        "source": item.get('source', '')
+        "url": item["url"],
+        "source": item.get("source", ""),
     }
 
 def stage2_summarization(selected_items):
-    """Summarize selected items one at a time with retry logic. Returns (articles_list, digest_text, stats)."""
-    logger.info(f"Stage 2: Summarizing {len(selected_items)} items (per-article, with retry)...")
-    articles = []
-    successes = 0
-    failures = 0
-
+    logger.info(f"Stage 2: summarizing {len(selected_items)} items...")
+    articles, successes, failures = [], 0, 0
     for i, item in enumerate(selected_items, 1):
-        logger.info(f"  [{i}/{len(selected_items)}] Summarizing: {item['title'][:70]}...")
-        ok, article = summarize_single_item(item, item['group'])
+        logger.info(f"  [{i}/{len(selected_items)}] {item['title'][:70]}...")
+        ok, article = summarize_single_item(item, item["group"])
         if ok:
             successes += 1
         else:
             failures += 1
         articles.append(article)
+    logger.info(f"Stage 2 done: {successes} ok, {failures} failed.")
 
-    logger.info(f"Stage 2 complete: {successes} successful, {failures} failed out of {len(selected_items)} items.")
-
-    # Rebuild a markdown digest text from the articles for webhook/bot use
+    # Build digest text for webhook fallback path
     digest_lines = ["# The Thinking Times — Daily Digest\n"]
-    current_cat = None
-    for article in articles:
-        if article['category'] != current_cat:
-            current_cat = article['category']
-            digest_lines.append(f"\n## {current_cat}\n")
-        digest_lines.append(f"### {article['title']}\n{article['summary']}\n**Source:** [{article.get('source','')}]({article['url']})\n")
-
+    cur_cat = None
+    for a in articles:
+        if a["category"] != cur_cat:
+            cur_cat = a["category"]
+            digest_lines.append(f"\n## {cur_cat}\n")
+        digest_lines.append(f"### {a['title']}\n{a['summary']}\n**Source:** [{a.get('source','')}]({a['url']})\n")
     return articles, "\n".join(digest_lines), {"successes": successes, "failures": failures}
 
 def parse_digest_to_articles(digest_or_articles):
-    """Parse LLM output into a list of article dicts.
-
-    New code path: if input is already a list of dicts (per-article structured results),
-    return it directly. If it's a raw text digest string, parse with the original regex logic.
-    """
-    # New structured path: stage2_summarization now returns per-article results directly
+    """Return the article list directly — stage2_summarization already returns structured dicts."""
     if isinstance(digest_or_articles, list):
-        logger.info(f"parse_digest_to_articles: received {len(digest_or_articles)} structured articles.")
         return digest_or_articles
+    logger.error("parse_digest_to_articles received a string — pipeline bug")
+    return []
 
-    # Legacy text-parsing path (kept for backward compatibility)
-    # Canonical category names — mirrors CANONICAL_CATEGORIES
-    KNOWN_CATEGORIES = {
-        "ARTIFICIAL INTELLIGENCE",
-        "RESEARCH & ACADEMIC BREAKTHROUGHS",
-        "PRODUCT LAUNCHES & COMPANY NEWS",
-        "PRODUCT LAUNCHES, UPDATES & COMPANY NEWS",
-        "PRODUCT LAUNCHES AND COMPANY NEWS",
-        "TECHNOLOGY",
-        "OPEN SOURCE & COMMUNITY",
-        "FUNDING & MARKET DYNAMICS",
-        "POLICY & REGULATION",
-        "FINANCE",
-        "GLOBAL NEWS",
-    }
-
-    def is_category_line(line):
-        """Return the canonical category name if line is a category header, else None."""
-        stripped = line.strip()
-        # Handle ## ARTIFICIAL INTELLIGENCE
-        if stripped.startswith("## "):
-            candidate = stripped[3:].strip()
-        else:
-            candidate = stripped
-        return candidate if candidate in KNOWN_CATEGORIES else None
-
-    digest_text = digest_or_articles
-    articles = []
-    current_category = None  # None until first recognized category
-
-    # Line-by-line parser: handles both ## headers and plain category names
-    lines = digest_text.split("\n")
-    i = 0
-    while i < len(lines):
-        # Check for category header
-        cat_match = is_category_line(lines[i])
-        if cat_match:
-            current_category = cat_match
-            i += 1
-            continue
-
-        # Check for article title (### Title)
-        if lines[i].strip().startswith("### "):
-            title = lines[i].strip().replace("### ", "").strip()
-            summary_parts = []
-            url = None
-            i += 1
-            # Collect summary lines and URL until next ### or category or end
-            while i < len(lines):
-                line = lines[i]
-                # Stop at next article or category
-                if is_category_line(line) or line.strip().startswith("### "):
-                    break
-                link_match = re.search(r'https?://[^\s\)\>]+', line)
-                if link_match and not url:
-                    url = link_match.group(0).rstrip('.,')
-                # Skip blank lines and section/ruler lines
-                if line.strip() and not line.startswith("#") and line.strip() not in ("---", "***"):
-                    summary_parts.append(line.strip())
-                i += 1
-
-            summary = " ".join(summary_parts)
-            if title and summary:
-                articles.append({
-                    "title": title,
-                    "summary": summary[:4000],
-                    "category": current_category if current_category else "GLOBAL NEWS",
-                    "url": url if url else "",
-                })
-        else:
-            i += 1
-
-    logger.info(f"Successfully parsed {len(articles)} articles.")
-    return articles
-
+# ── Discord dispatch ─────────────────────────────────────────────────────────────
 def create_discord_embeds(articles):
     embeds = []
-    for article in articles:
-        embed_url = article['url'] if article.get('url', '').startswith('http') else ''
-        source_name = article.get('source', 'Source')
-        embed = {
-            "title": article['title'],
-            "url": embed_url,  # makes title clickable in Discord
-            "description": article['summary'] + (f"\n[**{source_name}**]({embed_url})" if embed_url else ''),
+    for a in articles:
+        url = a["url"] if a.get("url", "").startswith("http") else ""
+        src = a.get("source", "Source")
+        # Strip trailing markdown source link — added back explicitly below
+        summary_clean = re.sub(r'\n?\[\*\*[^\]]+\*\]\([^)]+\)\s*$', '', a["summary"].strip())
+        embeds.append({
+            "title": a["title"],
+            "url": url,
+            "description": summary_clean + (f"\n[**{src}**]({url})" if url else ""),
             "color": 3447003,
-            "footer": {"text": f"Category: {article['category']}"},
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        embeds.append(embed)
+            "footer": {"text": f"Category: {a['category']}"},
+            "timestamp": datetime.utcnow().isoformat(),
+        })
     return embeds
 
 def send_via_webhook(digest_text, articles):
     if not DISCORD_WEBHOOK_URL:
         return
-    
     logger.info("Dispatching via Webhook...")
     try:
-        requests.post(DISCORD_WEBHOOK_URL, json={
-            "content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**",
-            "username": "The Thinking Times"
-        })
+        requests.post(DISCORD_WEBHOOK_URL, json={"content": "📰 **The Thinking Times: Daily AI Intelligence Dispatch**", "username": "The Thinking Times"})
     except Exception as e:
         logger.error(f"Webhook header error: {e}")
-
     if not articles:
-        chunks = [digest_text[i:i+1900] for i in range(0, len(digest_text), 1900)]
-        for chunk in chunks:
+        for chunk in [digest_text[i:i+1900] for i in range(0, len(digest_text), 1900)]:
             requests.post(DISCORD_WEBHOOK_URL, json={"content": chunk, "username": "The Thinking Times"})
         return
-
-    for article in articles:
+    for a in articles:
         try:
-            embed = create_discord_embeds([article])[0]
-            payload = {"username": "The Thinking Times", "embeds": [embed]}
-            r = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+            embed = create_discord_embeds([a])[0]
+            r = requests.post(DISCORD_WEBHOOK_URL, json={"username": "The Thinking Times", "embeds": [embed]})
             if r.status_code == 429:
-                retry_after = r.json().get('retry_after', 1)
-                time.sleep(retry_after)
+                time.sleep(r.json().get("retry_after", 1))
             time.sleep(1)
         except Exception as e:
             logger.error(f"Webhook article error: {e}")
@@ -655,106 +501,84 @@ def send_via_webhook(digest_text, articles):
 async def send_via_bot(articles):
     if not DISCORD_BOT_TOKEN:
         return
-
     logger.info("Dispatching via Bot...")
     intents = discord.Intents.default()
     intents.message_content = True
     intents.guilds = True
-    
-    client_bot = discord.Client(intents=intents)
-
-    # Use a Future to signal when we're done
+    bot = discord.Client(intents=intents)
     done = asyncio.Future()
 
-    @client_bot.event
+    @bot.event
     async def on_ready():
         try:
-            target_channel_name = config['news'].get('discord_bot_channel', 'the-thinking-times')
-            logger.info(f"Bot logged in as {client_bot.user}")
-            logger.info(f"Connected to {len(client_bot.guilds)} guilds.")
-            
-            for guild in client_bot.guilds:
-                logger.info(f"Scanning Guild: {guild.name}")
-                channel = discord.utils.get(guild.text_channels, name=target_channel_name)
+            target = config["news"].get("discord_bot_channel", "the-thinking-times")
+            logger.info(f"Bot logged in. Scanning {len(bot.guilds)} guilds...")
+            for guild in bot.guilds:
+                channel = discord.utils.get(guild.text_channels, name=target)
                 if not channel:
-                    channel = next((c for c in guild.text_channels if target_channel_name in c.name), None)
-                
+                    channel = next((c for c in guild.text_channels if target in c.name), None)
                 if channel:
                     try:
-                        logger.info(f"Found channel #{channel.name}. Sending...")
                         await channel.send("📰 **The Thinking Times: Daily AI Intelligence Dispatch**")
-                        for article in articles:
-                            embed_data = create_discord_embeds([article])[0]
-                            embed = discord.Embed.from_dict(embed_data)
+                        for a in articles:
+                            embed = discord.Embed.from_dict(create_discord_embeds([a])[0])
                             await channel.send(embed=embed)
                             await asyncio.sleep(0.5)
-                        logger.info(f"Sent to {guild.name}")
+                        logger.info(f"Sent to {guild.name}.")
                     except Exception as e:
                         logger.error(f"Send error in {guild.name}: {e}")
                 else:
-                    logger.warning(f"No channel #{target_channel_name} found in {guild.name}")
+                    logger.warning(f"No channel #{target} in {guild.name}.")
         finally:
             if not done.done():
                 done.set_result(True)
 
-    async def run_bot():
+    async def run():
         try:
-            await client_bot.start(DISCORD_BOT_TOKEN)
+            await bot.start(DISCORD_BOT_TOKEN)
         except Exception as e:
-            logger.error(f"Bot start error: {e}")
+            logger.error(f"Bot error: {e}")
             if not done.done():
                 done.set_exception(e)
 
-    # Run bot with timeout
-    bot_task = asyncio.create_task(run_bot())
+    task = asyncio.create_task(run())
     try:
         await asyncio.wait_for(done, timeout=60)
-        logger.info("Bot dispatch finished successfully.")
+        logger.info("Bot dispatch complete.")
     except asyncio.TimeoutError:
-        logger.error("Bot dispatch timed out! (Check if 'Message Content Intent' is enabled in Discord Portal)")
-    except Exception as e:
-        logger.error(f"Bot error: {e}")
+        logger.error("Bot timed out — check Message Content Intent in Discord Portal.")
     finally:
-        await client_bot.close()
-        bot_task.cancel()
+        await bot.close()
+        task.cancel()
 
+# ── Main ────────────────────────────────────────────────────────────────────────
 async def main():
-    logger.info("Starting The Thinking Times news generation...")
-    raw_news = fetch_all_news()
-    if not raw_news:
-        logger.error("No news fetched. Exiting.")
+    logger.info("Starting The Thinking Times...")
+    raw = fetch_all_news()
+    if not raw:
+        logger.error("No news fetched.")
         return
-    
-    selected = stage1_selection(raw_news)
-    articles, digest, stage2_stats = stage2_summarization(selected)
-    logger.info(f"Stage 2 stats: {stage2_stats['successes']} succeeded, {stage2_stats['failures']} failed.")
-    
-    output_data = {
-        "last_updated": datetime.now().isoformat(),
-        "articles": articles
-    }
-    
+
+    selected = stage1_selection(raw)
+    articles, digest, stats = stage2_summarization(selected)
+    logger.info(f"Stage 2: {stats['successes']} ok, {stats['failures']} failed.")
+
     with open("news.json", "w") as f:
-        json.dump(output_data, f, indent=4)
-        
-    # Hybrid Dispatch
+        json.dump({"last_updated": datetime.now().isoformat(), "articles": articles}, f, indent=4)
+
     if DRY_RUN:
         logger.info("[DRY-RUN] Discord dispatch skipped.")
     else:
         send_via_webhook(digest, articles)
         await send_via_bot(articles)
 
-    # Update seen-story cache with the URLs dispatched this run
-    seen_cache = load_story_cache()
+    cache = load_story_cache()
     now = datetime.now().isoformat()
-    for article in articles:
-        url = article.get('url') or ""
-        if url:
-            seen_cache[url] = now
-    save_story_cache(seen_cache)
-    logger.info(f"Story cache updated with {len(articles)} URLs (window: {STORY_CACHE_DAYS}d).")
-
-    logger.info("Process complete.")
+    for a in articles:
+        if a.get("url"):
+            cache[a["url"]] = now
+    save_story_cache(cache)
+    logger.info(f"Done. Story cache updated with {len(articles)} URLs.")
 
 if __name__ == "__main__":
     asyncio.run(main())

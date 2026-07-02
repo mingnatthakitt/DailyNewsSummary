@@ -41,42 +41,43 @@ news:
       CRITICAL: Select exactly 15-20 items. Prioritize Tech. Do not skip Global.
 
   stage2_prompt_template: |
-      You are a senior financial and technology analyst. Your job is to categorize and summarize the articles listed below.
+      You are a senior financial and technology analyst. Create a comprehensive, in-depth news digest for the {count} pre-selected news items below.
 
-      ## YOUR TASK
-      For the article below, write a 100–150 word analytical summary in a professional, non-wire-service tone.
-      Place the summary under the ONE correct ## category header shown above.
-      Then write the source URL on the line immediately after the summary.
+      {selected_news}
 
       ## CATEGORY HEADERS (use exactly as shown, including ##)
       ## Artificial Intelligence
-      ## Research & Academic breakthroughs
-      ## Product launches & Company News
+      ## Research & Academic Breakthroughs
+      ## Product Launches & Company News
       ## Technology
-      ## Opensource & Community
+      ## Open Source & Community
       ## Funding & Market Dynamics
       ## Policy & Regulation
       ## Finance
       ## Global News
 
       ## FORMATTING RULES
-      - Write the ## header, then immediately the first article's title on the next line — nothing else on that line.
-      - Write the summary, then the URL on its own line below the summary.
+      - Write the ## category header, then on the next line write ### followed by the article title: ### Article Title Here.
+      - On the following lines write the analytical summary (100–150 words). Professional, senior tone. No buzzwords. No preamble.
+      - On the next line write the source as a markdown link: [**Source Name**](https://...).
       - Leave exactly one blank line between articles.
       - Between the last article of one category and the ## header of the next, leave exactly one blank line.
       - Omit a ## header entirely if you placed no articles under it.
 
-      ## OUTPUT CONSTRAINT
-      Output ONLY the categorized digest. No preamble. No meta-sentences. No explanations.
-
       ## EXAMPLE OUTPUT
-      ## FUNDING & MARKET DYNAMICS
+      ## Funding & Market Dynamics
 
-      Anthropic Raises $2B in Series C Round Led by Google and Amazon
+      ### Anthropic Raises $2B in Series C Round Led by Google and Amazon
       Anthropic has closed a $2 billion Series C funding round co-led by Google and Amazon, valuing the AI safety company at $18 billion. The round will accelerate compute infrastructure and deployment of its Claude model family across enterprise markets. The investment signals continued strong appetite for frontier AI labs despite a broader slowdown in venture funding.
-      https://www.anthropic.com/blog/series-c
+      [**Anthropic Blog**](https://www.anthropic.com/blog/series-c)
 
-      {selected_news}
+      ## QUALITY REQUIREMENTS:
+      - ✅ Summarize ALL {count} items.
+      - ✅ Each summary MUST be 100–150 words.
+      - ✅ All sources must have clickable markdown links: [**Source Name**](https://...).
+      - ❌ Do NOT include <thought>, [Summary], [Analysis], or any meta-commentary blocks.
+      - ❌ Do NOT include raw URLs on a line by themselves — they must be inside markdown link format.
+      - ❌ Do NOT write explanations about why you selected or summarized something.
 
 feeds:
   "AI & Tech":

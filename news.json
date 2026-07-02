@@ -1,119 +1,95 @@
 {
-    "last_updated": "2026-07-02T01:36:10.116131",
+    "last_updated": "2026-07-02T12:01:00.355726",
     "articles": [
         {
             "title": "Converge Bio raises $25M, backed by Bessemer and execs from Meta, OpenAI, Wiz",
-            "summary": "Converge Bio raises $25M, backed by Bessemer and execs from Meta, OpenAI, Wiz\nConverge Bio has secured $25 million in Series A financing led by Bessemer Venture Partners, with strategic participation from executives at Meta, OpenAI, and cybersecurity firm Wiz. The AI-driven drug discovery startup leverages generative models to accelerate therapeutic candidate identification, positioning itself at the intersection of computational biology and large-scale foundation models. The involvement of senior leadership from frontier AI labs signals strong technical validation and potential access to cutting-edge architecture insights. Bessemer's lead reflects continued investor conviction in AI-native biotech platforms despite a more selective funding environment. Proceeds will likely fund compute infrastructure, data acquisition, and team expansion as Converge Bio seeks to translate in silico predictions into clinically viable assets. The round underscores a broader trend: domain-specific AI applications attracting capital from both traditional venture and strategic operators embedded in the AI ecosystem.\nhttps://techcrunch.com/2026/01/13/ai-drug-discovery-startup-converge-bio-pulls-in-25m-from-bessemer-and-execs-from-meta-openai-and-wiz/",
-            "category": "FUNDING & MARKET DYNAMICS",
+            "summary": "AI drug discovery startup Converge Bio raised $25 million in a Series A led by Bessemer Venture Partners, with additional backing from executives at Meta, OpenAI, and Wiz.",
+            "category": "AI & Tech",
             "url": "https://techcrunch.com/2026/01/13/ai-drug-discovery-startup-converge-bio-pulls-in-25m-from-bessemer-and-execs-from-meta-openai-and-wiz/"
         },
         {
             "title": "How one AI startup is helping rice farmers battle climate change",
-            "summary": "(How one AI startup is helping rice farmers battle climate change: Mitti Labs is working with The Nature Conservancy to expand the use of climate-friendly rice farming practices in India. The startup uses its AI to verify reductions in methane emissions....) [LLM summarization unavailable]",
+            "summary": "Mitti Labs is working with The Nature Conservancy to expand the use of climate-friendly rice farming practices in India. The startup uses its AI to verify reductions in methane emissions.",
             "category": "AI & Tech",
             "url": "https://techcrunch.com/2025/08/26/how-one-ai-startup-is-helping-rice-farmers-battle-climate-change/"
         },
         {
+            "title": "Harvard dropouts to launch \u2018always on\u2019 AI smart glasses that listen and record every conversation",
+            "summary": "After developing a facial-recognition app for Meta\u2019s Ray-Ban glasses and doxing random people, two former Harvard students are now launching a startup that makes smart glasses with an always-on microphone.",
+            "category": "AI & Tech",
+            "url": "https://techcrunch.com/2025/08/20/harvard-dropouts-to-launch-always-on-ai-smart-glasses-that-listen-and-record-every-conversation/"
+        },
+        {
             "title": "LLMs are stuck in a groupthink groove. This startup is trying to get them out.",
-            "summary": "(LLMs are stuck in a groupthink groove. This startup is trying to get them out.: Let\u2019s start with a game. Open up your chatbot of choice\u2014Claude, ChatGPT, Gemini\u2014and type \u201cGive me a random number between 1 and 10.\u201d You\u2019re going to get 7. Almost always. Now type \u201cAnother\u201d and you\u2019ll get 3 or 4. Type \u201cAnother\u201d again and you\u2019ll get 8...) [LLM summarization unavailable]",
+            "summary": "Let\u2019s start with a game. Open up your chatbot of choice\u2014Claude, ChatGPT, Gemini\u2014and type \u201cGive me a random number between 1 and 10.\u201d You\u2019re going to get 7. Almost always. Now type \u201cAnother\u201d and you\u2019ll get 3 or 4. Type \u201cAnother\u201d again and you\u2019ll get 8 or 9. That won\u2019t work every time\u2014but if it&#8230;",
             "category": "AI & Tech",
             "url": "https://www.technologyreview.com/2026/07/01/1140003/llms-are-stuck-in-a-groupthink-rut-this-startup-is-trying-to-get-them-out/"
         },
         {
             "title": "The Download: Anthropic launches Claude Science, and California\u2019s carbon manure math",
-            "summary": "The Download: Anthropic launches Claude Science, and California's carbon manure math\nAnthropic has unveiled Claude Science, a specialized product targeting scientific research workflows, at an invitation-only event for pharmaceutical executives, biotech founders, and academic researchers. The offering appears designed to integrate large-language-model capabilities into laboratory and discovery pipelines, positioning Anthropic to compete for enterprise contracts in life sciences and materials research. While technical specifics remain limited, the launch signals a strategic pivot toward verticalized AI tools that can command premium pricing in regulated, high-value sectors. The move mirrors similar vertical plays by rivals and underscores the industry's shift from general-purpose chat interfaces to domain-specific platforms that embed directly into R&D processes. Adoption will hinge on data governance, reproducibility guarantees, and integration with existing laboratory information management systems.\nhttps://www.technologyreview.com/2026/07/01/1139996/the-download-anthropic-claude-science-california-carbon-manure/",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
+            "summary": "This is today&#8217;s edition of The Download, our weekday newsletter that provides a daily dose of what&#8217;s going on in the world of technology. Claude Science is Anthropic\u2019s newest flagship product At an event for pharmaceutical executives, biotech founders, and researchers yesterday, Anthropi",
+            "category": "AI & Tech",
             "url": "https://www.technologyreview.com/2026/07/01/1139996/the-download-anthropic-claude-science-california-carbon-manure/"
         },
         {
+            "title": "Roundtables: Longevity\u2019s Next Frontier: \u201cReprogramming\u201d Your Body",
+            "summary": "Listen to the session or watch below Billions of dollars are flooding into efforts to reverse aging as scientists explore ways to return cells to a younger state. But how far off are these experimental treatments? Will they really work? Watch a conversation exploring longevity&#8217;s new focus. Spe",
+            "category": "AI & Tech",
+            "url": "https://www.technologyreview.com/2026/06/30/1139958/roundtables-longevitys-next-frontier-reprogramming-your-body/"
+        },
+        {
+            "title": "The Download: AI \u201ccoworkers\u201d and stratospheric internet",
+            "summary": "This is today&#8217;s edition of The Download, our weekday newsletter that provides a daily dose of what&#8217;s going on in the world of technology. AI agents are not your \u201ccoworkers\u201d Imagine coming in to work to learn that a new underling will report to you. The worker is not a person but an AI to",
+            "category": "AI & Tech",
+            "url": "https://www.technologyreview.com/2026/06/30/1139954/the-download-ai-agents-coworkers-solar-powered-internet/"
+        },
+        {
             "title": "Notion killing Skiff-influenced email app since most users use AI agents instead",
-            "summary": "Notion killing Skiff-influenced email app since most users use AI agents instead\nNotion is discontinuing its email application \u2014 a product influenced by its 2024 acquisition of privacy-focused email startup Skiff \u2014 after determining that the majority of its user base has shifted toward AI-driven agents for inbox management. The decision reflects a broader strategic pivot: rather than maintaining a standalone email client, Notion is redirecting resources toward embedding agentic AI capabilities directly into its core workspace platform. This move underscores how rapidly generative AI is reshaping product roadmaps, rendering recently acquired technologies obsolete before they can be fully integrated. For Notion, the bet is that users prefer intelligent automation within their existing workflow over a separate, even privacy-centric, email interface. The shutdown highlights the accelerating compression of product lifecycles in the AI era and signals that incumbents must continuously reassess whether acquired assets align with an agent-first future.\nhttps://arstechnica.com/gadgets/2026/06/notion-killing-skiff-influenced-email-app-since-most-users-use-ai-agents-instead/",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
+            "summary": "Notion is \"going all in on using agents to run your inbox.\"",
+            "category": "AI & Tech",
             "url": "https://arstechnica.com/gadgets/2026/06/notion-killing-skiff-influenced-email-app-since-most-users-use-ai-agents-instead/"
         },
         {
+            "title": "Anthropic \"pauses\" token-based billing for its Claude Agent SDK",
+            "summary": "Move originally planned for Monday would have heavily increased power users' costs.",
+            "category": "AI & Tech",
+            "url": "https://arstechnica.com/ai/2026/06/anthropic-pauses-token-based-billing-for-its-claude-agent-sdk/"
+        },
+        {
+            "title": "Goose, a New Gay Dating App, Appears to Be a Psyop",
+            "summary": "Touted as a less-hookup-focused Grindr, Goose is an invite-only space for gay men. The problem is the people promoting it don\u2019t seem real.",
+            "category": "AI & Tech",
+            "url": "https://www.wired.com/story/goose-a-new-gay-dating-app-appears-to-be-a-psyop/"
+        },
+        {
             "title": "You Can Now Sound the Alarm on AI Behaving Badly",
-            "summary": "You Can Now Sound the Alarm on AI Behaving Badly\nA new platform called Flare has launched to provide a centralized mechanism for reporting dangerous AI behavior, addressing a critical gap in AI safety infrastructure. The website enables users to flag instances where chatbots or AI systems exhibit harmful conduct such as providing instructions for weapons creation, leaking personal data, or generating other dangerous outputs. By creating a structured reporting channel, Flare aims to aggregate safety incidents that currently scatter across social media, forums, and direct communications with developers. The initiative reflects growing recognition that post-deployment monitoring requires accessible, standardized tooling rather than ad-hoc community efforts. While the platform's long-term efficacy depends on developer responsiveness and integration with existing safety workflows, its launch signals a maturing approach to AI accountability that moves beyond pre-release testing toward continuous, crowdsourced vigilance.\nhttps://www.wired.com/story/flare-website-ai-flaw-reporting-safety/",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
+            "summary": "Are you worried your AI chatbot is trying to build a bomb or leak personal information about you? There\u2019s a website for that.",
+            "category": "AI & Tech",
             "url": "https://www.wired.com/story/flare-website-ai-flaw-reporting-safety/"
         },
         {
+            "title": "Anthropic Added a New Security Measure to Get Back Into the Trump Administration\u2019s Good Graces",
+            "summary": "The government has removed restrictions on Anthropic\u2019s Fable 5 and Mythos 5 AI models\u2014but there were strings attached.",
+            "category": "AI & Tech",
+            "url": "https://www.wired.com/story/anthropic-added-a-new-security-measure-to-get-back-into-the-trump-administrations-good-graces/"
+        },
+        {
             "title": "Claude Helped a Hacker Find a Way to Issue Tickets to Almost Every US Music Festival",
-            "summary": "(Claude Helped a Hacker Find a Way to Issue Tickets to Almost Every US Music Festival: A researcher found that using Anthropic\u2019s Claude Opus 4.7, he could break into the website of Front Gate\u2014used by every festival from Lollapalooza to Bonnaroo\u2014and freely issue any ticket he chose....) [LLM summarization unavailable]",
+            "summary": "A researcher found that using Anthropic\u2019s Claude Opus 4.7, he could break into the website of Front Gate\u2014used by every festival from Lollapalooza to Bonnaroo\u2014and freely issue any ticket he chose.",
             "category": "AI & Tech",
             "url": "https://www.wired.com/story/claude-helped-a-hacker-find-a-way-to-issue-tickets-to-almost-every-us-music-festival/"
         },
         {
-            "title": "Introducing GeneBench-Pro",
-            "summary": "Introducing GeneBench-Pro\nOpenAI has launched GeneBench-Pro, a specialized benchmark designed to evaluate artificial intelligence performance across genomics, biology, and scientific research domains using complex, real-world datasets. The benchmark addresses a critical gap in AI evaluation by moving beyond standard language and reasoning tasks to assess model capabilities in high-stakes scientific applications where accuracy and domain-specific reasoning are paramount. GeneBench-Pro incorporates multi-modal challenges requiring integration of genomic sequences, protein structures, and experimental data, reflecting the interdisciplinary nature of modern computational biology. This release signals OpenAI's strategic push into scientific AI tooling and positions the company to capture value in the growing bioinformatics and drug discovery markets. By establishing standardized evaluation metrics for scientific AI, the benchmark could accelerate adoption of foundation models in research pipelines while providing a transparent framework for comparing model architectures on domain-relevant tasks.\nhttps://openai.com/index/introducing-genebench-pro",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
-            "url": "https://openai.com/index/introducing-genebench-pro"
+            "title": "Google built a great smart speaker, but Gemini isn\u2019t ready for it",
+            "summary": "Smart speakers have spent the past few years searching for a compelling second act. Beyond music, timers, and controlling your lights, they've struggled to justify taking up space on the kitchen counter. AI promised to change that. Amazon debuted its new hardware powered by a revamped Alexa last fal",
+            "category": "AI & Tech",
+            "url": "https://www.theverge.com/tech/959503/google-home-speaker-review-gemini-for-home"
         },
         {
-            "title": "Mapping Europe\u2019s AI Workforce Opportunity",
-            "summary": "Mapping Europe\u2019s AI Workforce Opportunity\nOpenAI has published a comprehensive report analyzing the potential impact of artificial intelligence on the European labor market. The study categorizes occupations by their exposure to automation, augmentation, and transformation, offering a granular view of how AI could reshape workflows across sectors. Key findings indicate that while certain roles face high automation risk, many more will experience productivity gains through human-AI collaboration. The report emphasizes the importance of proactive upskilling, social safety nets, and policy frameworks to manage the transition. By mapping the distribution of affected jobs across EU member states, the analysis provides policymakers and businesses with a data-driven foundation for strategic workforce planning. The methodology combines occupational data with AI capability assessments, highlighting the nuanced interplay between technology adoption and labor dynamics. This research contributes to the growing evidence base needed to navigate the socioeconomic implications of generative AI in Europe.\nhttps://openai.com/index/mapping-ai-jobs-transition-eu",
-            "category": "RESEARCH & ACADEMIC BREAKTHROUGHS",
-            "url": "https://openai.com/index/mapping-ai-jobs-transition-eu"
-        },
-        {
-            "title": "Start building with Nano Banana 2 Lite and Gemini Omni Flash",
-            "summary": "Start building with Nano Banana 2 Lite and Gemini Omni Flash\nGoogle DeepMind has released two new models aimed at expanding developer access to efficient, high-performance AI. Nano Banana 2 Lite appears to be a compact, lightweight variant optimized for on-device or latency-sensitive applications, while Gemini Omni Flash likely represents a speed-optimized multimodal model within the Gemini family. The launch underscores Google's strategy of tiering its model portfolio to address diverse compute budgets and deployment scenarios, from edge devices to high-throughput cloud inference. By offering \"Lite\" and \"Flash\" variants, DeepMind signals a focus on practical deployment economics \u2014 reducing cost and latency without sacrificing core capabilities. This move positions Google competitively against rival labs that have similarly introduced distilled or accelerated models to capture the growing demand for production-ready AI at scale.\nhttps://deepmind.google/blog/start-building-with-nano-banana-2-lite-and-gemini-omni-flash/",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
-            "url": "https://deepmind.google/blog/start-building-with-nano-banana-2-lite-and-gemini-omni-flash/"
-        },
-        {
-            "title": "Unlocking UK house-building with AI-accelerated planning",
-            "summary": "Unlocking UK house-building with AI-accelerated planning\nGoogle DeepMind has partnered with the UK government to develop an AI-powered prototype designed to accelerate housing planning decisions, addressing a critical bottleneck in the nation's homebuilding pipeline. The initiative applies large language models and generative AI to parse complex planning documents, local regulations, and consultation responses \u2014 tasks that currently consume months of manual review. By automating information extraction and synthesis, the system aims to reduce decision timelines from weeks to days, potentially unlocking thousands of stalled housing units. The collaboration signals a shift toward operational AI deployment in public-sector workflows, moving beyond pilot studies into production-grade tooling. For DeepMind, the project extends its applied AI portfolio beyond healthcare and science into civic infrastructure, reinforcing its commercial strategy under Alphabet. Success hinges on model accuracy in interpreting nuanced legal language and gaining trust from planning officers accustomed to discretionary judgment.\nhttps://deepmind.google/blog/unlocking-uk-house-building-with-ai-accelerated-planning/",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
-            "url": "https://deepmind.google/blog/unlocking-uk-house-building-with-ai-accelerated-planning/"
-        },
-        {
-            "title": "Alibaba-affiliate Ant Group rushes into humanoid robots with a dozen deals in 18 months",
-            "summary": "Alibaba-affiliate Ant Group rushes into humanoid robots with a dozen deals in 18 months\nAnt Group, the financial affiliate of Alibaba, has accelerated its push into humanoid robotics by leading a 500 million yuan ($73.6 million) funding round for Zeroth Robotics, marking its twelfth such deal in 18 months. The investment underscores Ant's strategic pivot toward embodied AI and automation, leveraging its fintech ecosystem to fund hardware startups that could integrate with its payment, logistics, and wealth-management platforms. Zeroth, founded in 2023, focuses on general-purpose humanoid robots for industrial and service applications. The deal reflects a broader trend of Chinese tech giants \u2014 including Baidu, Tencent, and Xiaomi \u2014 pouring capital into robotics to capture the next wave of AI-driven productivity. Ant's rapid dealmaking signals confidence in the commercial viability of humanoids despite lingering technical and cost challenges.\nhttps://www.cnbc.com/2026/07/01/alibaba-affiliate-ant-group-enters-the-humanoid-robot-market-with-12-deals.html",
-            "category": "FUNDING & MARKET DYNAMICS",
-            "url": "https://www.cnbc.com/2026/07/01/alibaba-affiliate-ant-group-enters-the-humanoid-robot-market-with-12-deals.html"
-        },
-        {
-            "title": "NVIDIA (NVDA), Palantir (PLTR) Partner to Deploy Secure AI Models for Government and Infrastructure",
-            "summary": "NVIDIA (NVDA), Palantir (PLTR) Partner to Deploy Secure AI Models for Government and Infrastructure\nNVIDIA and Palantir have announced a strategic partnership to deliver secure, scalable AI solutions tailored for government agencies and critical infrastructure operators. The collaboration integrates NVIDIA's accelerated computing platform \u2014 including its AI Enterprise software suite and DGX infrastructure \u2014 with Palantir's Artificial Intelligence Platform (AIP) and Foundry operating system. This combination aims to enable real-time, on-premise and air-gapped deployment of large language models and custom AI workloads while meeting stringent compliance, sovereignty, and security requirements. The alliance addresses a growing demand from public-sector clients for AI capabilities that do not compromise data governance or operational resilience. By co-engineering reference architectures and joint go-to-market motions, the companies seek to accelerate adoption of generative AI in defense, intelligence, energy, and transportation sectors. The partnership underscores a broader industry shift toward vertically integrated, hardware-software stacks for sovereign AI deployment.\nhttps://finance.yahoo.com/technology/ai/articles/nvidia-nvda-palantir-pltr-partner-133652471.html",
-            "category": "PRODUCT LAUNCHES & COMPANY NEWS",
-            "url": "https://finance.yahoo.com/technology/ai/articles/nvidia-nvda-palantir-pltr-partner-133652471.html"
-        },
-        {
-            "title": "Mega takeovers drive record $2.8tn in dealmaking",
-            "summary": "Mega takeovers drive record $2.8tn in dealmaking\nGlobal M&A activity surged to a record $2.8 trillion as corporations and investors restructure portfolios in response to AI-driven economic transformation. The dealmaking boom reflects strategic repositioning rather than cyclical exuberance: acquirers are targeting AI capabilities, data infrastructure, and adjacent technology stacks to secure competitive moats. Mega-deals dominate volume, with buyers leveraging strong balance sheets and cheap financing to absorb innovation at scale. Private equity participation remains robust, though regulatory scrutiny has lengthened timelines for cross-border transactions. The trend signals a structural shift \u2014 capital is flowing toward companies that can operationalize AI across legacy business models, while pure-play AI startups command premium valuations. Sellers benefit from scarce strategic assets, but integration risk looms large as cultural and technical debt accumulate. The pace suggests 2024 may extend the record if antitrust frameworks adapt.\nhttps://www.ft.com/content/000d10d6-cdfb-4110-9c6b-a5cd133b7a0f",
-            "category": "FUNDING & MARKET DYNAMICS",
-            "url": "https://www.ft.com/content/000d10d6-cdfb-4110-9c6b-a5cd133b7a0f"
-        },
-        {
-            "title": "FedEx strikes $1.4bn deal to sell logistics unit to CMA CGM",
-            "summary": "(FedEx strikes $1.4bn deal to sell logistics unit to CMA CGM: French shipping group aims to expand in US and strengthen foothold in supply chain...) [LLM summarization unavailable]",
-            "category": "Finance",
-            "url": "https://www.ft.com/content/f4a8e4b2-5dcf-47b4-97a5-ec6a2a8a97f5"
-        },
-        {
-            "title": "CoreWeave, Nebius shares tumble as Meta stands to become a fresh threat in the cloud",
-            "summary": "CoreWeave, Nebius Shares Tumble as Meta Stands to Become a Fresh Threat in the Cloud\nShares of AI-focused cloud providers CoreWeave and Nebius declined sharply following reports that Meta Platforms is exploring the monetization of its vast internal AI infrastructure, potentially entering the merchant cloud market as a direct competitor. The market reaction underscores growing investor skepticism regarding the durability of \"neocloud\" business models, which have commanded premium valuations predicated on GPU scarcity and specialized orchestration. Meta's potential pivot \u2014 leveraging its massive capital expenditure, proprietary silicon efforts, and existing data center footprint \u2014 could compress margins and undercut the pricing power of pure-play GPU clouds. While CoreWeave and Nebius benefit from first-mover advantages and deep partnerships with Nvidia, the specter of a hyperscaler with effectively zero customer acquisition cost and unlimited patient capital introduces a structural risk that the market is now pricing in.\nhttps://www.marketwatch.com/story/coreweave-nebius-shares-tumble-as-meta-stands-to-become-a-fresh-threat-in-the-cloud-a47c3616?mod=mw_rss_topstories",
-            "category": "FUNDING & MARKET DYNAMICS",
-            "url": "https://www.marketwatch.com/story/coreweave-nebius-shares-tumble-as-meta-stands-to-become-a-fresh-threat-in-the-cloud-a47c3616?mod=mw_rss_topstories"
-        },
-        {
-            "title": "US blocks long-term renewal of North American trade deal",
-            "summary": "(US blocks long-term renewal of North American trade deal: US blocks 16-year North America trade deal renewal, triggering annual rolling reviews...) [LLM summarization unavailable]",
-            "category": "General",
-            "url": "https://www.bbc.co.uk/news/articles/ce8j2lmrvrdo?at_medium=RSS&at_campaign=rss"
-        },
-        {
-            "title": "South Korean Stocks Tumble 7% as AI Jitters Hurt Chipmakers",
-            "summary": "(South Korean Stocks Tumble 7% as AI Jitters Hurt Chipmakers: South Korean stocks slumped as Meta Platforms Inc.\u2019s plan to sell computing power raised questions over excess in AI capacity, driving a selloff in chipmakers....) [LLM summarization unavailable]",
-            "category": "General",
-            "url": "https://www.bloomberg.com/news/articles/2026-07-02/south-korean-stocks-tumble-6-as-ai-jitters-hurt-chipmakers"
-        },
-        {
-            "title": "Underground Births, Under Bombardment: Childbearing in Ukraine",
-            "summary": "(Underground Births, Under Bombardment: Childbearing in Ukraine: Bombings, blackouts and displacement compound maternal anxiety. Still, many women persevere. \u201cWe must bring new life,\u201d one said....) [LLM summarization unavailable]",
-            "category": "General",
-            "url": "https://www.nytimes.com/2026/07/01/world/europe/ukraine-war-pregnant-women-hospitals.html"
+            "title": "Google\u2019s NotebookLM can sum up your research in a TikTok-style clip",
+            "summary": "Google's NotebookLM is adding a new way to catch up on your notes: TikTok-style AI videos. The new feature is rolling out to Google AI Ultra and Pro subscribers, allowing NotebookLM to generate 60-second vertical AI clips based on the sources you upload to the app. The example shared by Google detai",
+            "category": "AI & Tech",
+            "url": "https://www.theverge.com/tech/959778/google-notebooklm-ai-clips"
         }
     ]
 }

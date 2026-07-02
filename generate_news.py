@@ -344,6 +344,21 @@ def _is_valid_summary(text):
             return False
     return True
 
+def _strip_title_from_description(title, description):
+    """Strip the title (and any prefix like 'Title: ' or '(Title: ...)') from RSS description."""
+    if not description or not title:
+        return description
+    # Escape special regex chars in title, use first 80 chars to avoid over-long patterns
+    escaped = re.escape(title[:80])
+    # Remove "Title: TitleText\n\n" or "Title: TitleText — ..." prefix
+    description = re.sub(r'^Title:\s*' + escaped + r'[\s\—\-:]+', '', description, flags=re.IGNORECASE)
+    # Remove "(Title: TitleText)" wrapper
+    description = re.sub(r'^\(' + escaped + r'\)[\s\-:]*', '', description, flags=re.IGNORECASE)
+    # Remove bare title at start (when RSS just puts title as plain text first line)
+    description = re.sub(r'^' + escaped + r'[\s\—\-:]*', '', description, flags=re.IGNORECASE)
+    return description
+
+
 def _strip_category_header(content):
     """Remove the leading ## category header line from LLM output, if present."""
     lines = content.split("\n")
@@ -354,12 +369,14 @@ def _strip_category_header(content):
 
 def summarize_single_item(item, category_hint):
     """Summarize a single news item with exponential-backoff retry. Returns (success, article_dict)."""
+    # Strip title from description before sending to LLM — RSS descriptions echo the title verbatim
+    clean_desc = _strip_title_from_description(item['title'], item['description'])
     single_item_text = (
         f"ID: {item['id']}\n"
         f"Title: {item['title']}\n"
         f"Source: {item['source']}\n"
         f"URL: {item['url']}\n"
-        f"Content: {item['description']}"
+        f"Content: {clean_desc}"
     )
     prompt = config['news']['stage2_prompt_template'].format(
         selected_news=single_item_text
@@ -369,7 +386,7 @@ def summarize_single_item(item, category_hint):
             response = client.chat.completions.create(
                 model=MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News."},
+                    {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: ARTIFICIAL INTELLIGENCE | RESEARCH & ACADEMIC BREAKTHROUGHS | PRODUCT LAUNCHES & COMPANY NEWS | TECHNOLOGY | OPEN SOURCE & COMMUNITY | FUNDING & MARKET DYNAMICS | POLICY & REGULATION | FINANCE | GLOBAL NEWS. Example: \"## PRODUCT LAUNCHES & COMPANY NEWS\\n<title>\\n<summary>\\n<url>\" — the ## line MUST come first. Do NOT skip the ## header. After the summary, write only the URL on its own line."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
@@ -404,9 +421,46 @@ def summarize_single_item(item, category_hint):
                 logger.info(f"  Retrying in {backoff}s...")
                 time.sleep(backoff)
 
-    # Final fallback: use raw description
+    # Primary model exhausted — try Gemma as fallback (2 attempts, no extra backoff between models)
+    if GEMINI_API_KEY:
+        logger.info(f"  Primary model failed — trying Gemma for: {item['title'][:60]}...")
+        gemma_client = OpenAI(
+            api_key=GEMINI_API_KEY,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        for g_attempt in range(1, 3):
+            try:
+                response = gemma_client.chat.completions.create(
+                    model="gemma-4-31b-it",
+                    messages=[
+                        {"role": "system", "content": "You are a senior analyst specialising in AI, Technologies, Finance, and Global Situation and News. CRITICAL FORMAT: Write your summary under a ## header using the EXACT category name from this list: ARTIFICIAL INTELLIGENCE | RESEARCH & ACADEMIC BREAKTHROUGHS | PRODUCT LAUNCHES & COMPANY NEWS | TECHNOLOGY | OPEN SOURCE & COMMUNITY | FUNDING & MARKET DYNAMICS | POLICY & REGULATION | FINANCE | GLOBAL NEWS. Example: \"## PRODUCT LAUNCHES & COMPANY NEWS\\n<title>\\n<summary>\\n<url>\" — the ## line MUST come first. Do NOT skip the ## header. After the summary, write only the URL on its own line."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=1024
+                )
+                content = response.choices[0].message.content.strip()
+                if not _is_valid_summary(content):
+                    logger.warning(f"  Gemma attempt {g_attempt}/2 invalid — retrying...")
+                    continue
+
+                parsed_cat = _parse_article_category(content)
+                final_cat = parsed_cat if parsed_cat else category_hint
+                clean_summary = _strip_category_header(content)
+
+                logger.info(f"  Gemma fallback succeeded for: {item['title'][:60]}")
+                return True, {
+                    "title": item['title'],
+                    "summary": clean_summary,
+                    "category": final_cat,
+                    "url": item['url']
+                }
+            except Exception as e:
+                logger.warning(f"  Gemma attempt {g_attempt}/2 failed: {e}")
+
+    # Final fallback: use raw description — clean, no user-visible error markers
     logger.error(f"  All {MAX_RETRIES} attempts failed or returned garbage for '{item['title'][:60]}'. Using fallback.")
-    fallback_summary = f"({item['title']}: {item['description'][:250]}...) [LLM summarization unavailable]"
+    fallback_summary = item['description'][:300].strip() if item['description'] else item['title']
     return False, {
         "title": item['title'],
         "summary": fallback_summary,
@@ -534,13 +588,11 @@ def create_discord_embeds(articles):
     for article in articles:
         embed = {
             "title": article['title'],
-            "description": article['summary'],
+            "description": article['summary'] + f"\n[**Source**]({article['url']})" if article.get('url', '').startswith('http') else article['summary'],
             "color": 3447003,
             "footer": {"text": f"Category: {article['category']}"},
             "timestamp": datetime.utcnow().isoformat()
         }
-        if article['url'] and article['url'].startswith("http"):
-            embed["url"] = article['url']
         embeds.append(embed)
     return embeds
 

@@ -141,15 +141,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Short labels shown as the source-link text on each news card.
     const CAT_LABELS = {
-        'artificial intelligence':              'AI',
-        'research & academic breakthroughs':    'Research',
-        'product launches & company news':      'Launches',
-        'technology':                          'Tech',
-        'open source & community':             'OSS',
-        'funding & market dynamics':           'Markets',
-        'policy & regulation':                 'Policy',
+        'artificial intelligence':              'Artificial Intelligence',
+        'research & academic breakthroughs':    'Research & Academic Breakthroughs',
+        'product launches & company news':      'Product Launches & Company News',
+        'technology':                          'Technology',
+        'open source & community':             'Open Source & Community',
+        'funding & market dynamics':           'Funding & Market Dynamics',
+        'policy & regulation':                 'Policy & Regulation',
         'finance':                             'Finance',
-        'global news':                         'Global',
+        'global news':                         'Global News',
     };
 
     function catLabel(cat) {

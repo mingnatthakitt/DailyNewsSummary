@@ -37,8 +37,8 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 #   - MODEL env not set                  → try MODEL env, then config.yaml, then hardcoded defaults
 
 HARDCODED_DEFAULTS = [
-    ("nvidia", "https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-ultra-550b-a55b", NVIDIA_API_KEY),
     ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemma-4-31b-it", GEMINI_API_KEY),
+    ("nvidia", "https://integrate.api.nvidia.com/v1", "nvidia/nemotron-3-ultra-550b-a55b", NVIDIA_API_KEY),
 ]
 
 PROVIDER_MODEL_PATTERNS = {
@@ -82,7 +82,7 @@ if _active_provider is None:
         API_KEY = _pk
         logger.info(f"Using custom provider: MODEL='{MODEL}', BASE_URL from PROVIDER_BASE_URL")
     else:
-        # Step 3: Fall back through hardcoded (NVIDIA+Nemotron → AIStudio+Gemma)
+        # Step 3: Fall back through hardcoded (AIStudio+Gemma → NVIDIA+Nemotron)
         for prov, base, model_d, key in HARDCODED_DEFAULTS:
             if key:
                 _active_provider = prov

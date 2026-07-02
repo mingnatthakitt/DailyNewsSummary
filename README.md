@@ -71,7 +71,7 @@ The **`MODEL` env var is the primary way to select model and provider.** The mod
 | `nvidia/nemotron-3-ultra-550b-a55b` (or any name with "nvidia"/"nemotron") | NVIDIA NIM | `https://integrate.api.nvidia.com/v1` | `NVIDIA_API_KEY` |
 | `gemma-4-31b-it` (or any name with "gemma"/"gemini") | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai/` | `GEMINI_API_KEY` |
 | Any other model name | Custom | `PROVIDER_BASE_URL` env var (required) | `PROVIDER_API_KEY` (required) |
-| Not set | **Hardcoded fallback chain**: tries `NVIDIA_API_KEY` → `GEMINI_API_KEY` | — | — |
+| Not set | **Hardcoded fallback chain**: tries `GEMINI_API_KEY` → `NVIDIA_API_KEY` | — | — |
 
 **Resolution priority for `MODEL`:**
 1. `MODEL` env var (highest) — controls Stage 2 summarization model

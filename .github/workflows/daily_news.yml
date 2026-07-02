@@ -9,6 +9,7 @@ permissions:
   contents: write
 
 jobs:
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +33,7 @@ jobs:
           MODEL: ${{ secrets.MODEL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          STORY_CACHE_DAYS: ${{ secrets.STORY_CACHE_DAYS }}
         run: python generate_news.py
 
       - name: Commit and push changes
